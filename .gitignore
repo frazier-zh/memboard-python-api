@@ -1,0 +1,9 @@
+memboard_test.py
+
+__pycache__/
+bin/
+.vscode/
+
+
+ok.py
+_ok.pyd
