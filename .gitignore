@@ -1,6 +1,5 @@
 memboard_test.py
 
-bin/
 __pycache__/
 
 ok.py
