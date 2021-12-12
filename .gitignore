@@ -1,0 +1,8 @@
+example*.py
+memboard_test.py
+
+bin/
+__pycache__/
+
+ok.py
+_ok.pyd
