@@ -1,0 +1,4 @@
+src/*
+!src/*.v
+!src/*.ngc
+!src/*.vhd
