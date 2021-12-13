@@ -2,3 +2,6 @@ src/*
 !src/*.v
 !src/*.ngc
 !src/*.vhd
+!src/*.ucf
+!src/*.cgp
+!src/*.prj
