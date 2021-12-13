@@ -20,72 +20,46 @@
 //////////////////////////////////////////////////////////////////////////////////
 module multiclock_interface(
     input clk,
-	 input rst,
 	 
 	 // Cross clock domain input
 	 input ti_clk,
 	 input data_write,
 	 input [15:0] data_in,
-	 input en,
-	 output cd,
+	 input cd_en,
+	 output cd_rdy,
 	 
 	 // Clock time output
-	 input cs,
-	 input clr,
-	 output [47:0] data_out,
-	 output reg rdy
+	 input en,
+	 output [47:0] data_out
     );
 	
 reg [47:0] counter_data;
-wire clock_en;
-assign clock_en = ~clr;
+reg cd_load;
+wire clr;
+assign clr = ~en;
 
 always @(posedge ti_clk)
 	if (data_write == 1) begin
 		counter_data <= {counter_data[31:0], data_in};
 	end
 
-reg [7:0] time_count;
-reg time_enable;
-
 always @(posedge clk)
-	if (time_enable) begin
-		time_count <= time_count + 1;
-	end else begin
-		time_count <= 0;
-	end
-	
-always @(posedge clk)
-	if (cs == 1) begin
-		rdy <= 0;
-		time_enable <= 1;
-	end else if (time_enable == 1) begin
-		case (time_count)
-			1: begin
-					data_out_en <= 1;
-					data_out <= clock_data[15:0];
-				end
-			2: data_out <= clock_data[31:16];
-			3: data_out <= clock_data[47:32];
-			4: begin
-					time_enable <= 0;
-					data_out_en <= 0;
-					rdy <= 1;
-				end
-		endcase
-	end
+	if (cd_en == 1)
+		cd_load <= cd_rdy;
+	else
+		cd_load <= 0;
 
 BC_DOWN_48b counter(
 	.clk(clk),
-	.load(en),
+	.load(cd_load),
 	.l(counter_data),
-	.thresh0(cd),
+	.thresh0(cd_rdy),
 	.q()
 );
 
 BC_UP_48b clock(
 	.clk(clk),
-	.ce(clock_en),
+	.ce(en),
 	.sclr(clr),
 	.q(data_out)
 );
