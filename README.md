@@ -17,7 +17,7 @@ DAC maximum glitch settle time 1000ns(12V), 400ns(5V)
 
 Swtich set speed 190ns ?
 
-# Mempry Board User Guide
+# Memory Board User Guide
 
 ## Basic information
 
