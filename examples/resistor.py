@@ -10,7 +10,7 @@ def run():
 
     apply(pin=1, v=2.5 *u.V)
 
-    return time(), measure(pin=top_pin, drive_pin=bottom_pin, v=1 *u.V)
+    return time(), measure(pin=bottom_pin, drive_pin=top_pin, v=1 *u.V)
 
 with mb.connect('top.bit'):
     mb.execute(run, every=200 *u.us, total=5 *u.s, out='test')

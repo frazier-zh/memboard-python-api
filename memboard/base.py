@@ -143,7 +143,7 @@ def execute(run, every=0, total=0, out='temp'):
 
     # Print output info
     print(f"""
-======= Output list =======
+====== Output Information =======
 Total lines:        {session.size}
 Total output:       {session.output_index}
 Execution time:     {u.to_pretty(run_time)}
@@ -172,7 +172,7 @@ Output file:        ./{out}.dat
     stop_time = total/u.s
     with open(out+'.dat', 'wb') as file:
         while time.time()-start_time<stop_time:
-            if device.wait_trigger_out(0x60):
+            if device.wait_trigger_out(0x60, 0):
                 device.pipe_out(0xA1, time_result)
                 device.pipe_out(0xA0, data_result)
                 file.write(time_result)

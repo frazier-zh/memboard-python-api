@@ -34,4 +34,4 @@ def to_voltage(value):
     return value/0xFFF*24-12
 
 def to_int(voltage):
-    return int((voltage+12/24)*0xFFF)
+    return int((voltage+12)/24*0xFFF)

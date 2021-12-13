@@ -70,7 +70,8 @@ def wait_trigger_out(addr, index, time_out=1):
     return True
 
 def wire_in(addr, value):
-    if __device.UpdateWireIns(addr, value):
+    __device.SetWireInValue(addr, value)
+    if __device.UpdateWireIns():
         RuntimeError('UpdateWireIns() failed.')
 
 def wire_out(addr):
