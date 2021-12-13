@@ -5,3 +5,4 @@ src/*
 !src/*.ucf
 !src/*.cgp
 !src/*.prj
+!src/top.bit
