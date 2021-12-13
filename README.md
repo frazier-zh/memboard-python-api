@@ -1,4 +1,4 @@
-# Introduction
+# 1. Introduction
 
 
 
@@ -17,9 +17,9 @@ DAC maximum glitch settle time 1000ns(12V), 400ns(5V)
 
 Swtich set speed 190ns ?
 
-# Memory Board User Guide
+# 2. Memory Board User Guide
 
-## Basic information
+## 2.1. Basic information
 
 
     Memory board version:           2020-09-18
@@ -37,9 +37,14 @@ Swtich set speed 190ns ?
     FPGA core language:             Verilog
     API language:                   Python 3.7
 
-## Install Python3.7
+## 2.2. Software Installation
 
-1. Install Miniconda3 Windows 64-bit [Official webpage](https://docs.conda.io/en/latest/miniconda.html)
+### 2.2.1. Install Python3.7
+
+Install **Miniconda3 Windows 64-bit** [Official webpage](https://docs.conda.io/en/latest/miniconda.html).
+**Notice:** Allow Miniconda to modify PATH variables.
+
+Open Windows Command Prompt by typing "cmd" in windows search bar.
 
 ```
 conda create -n py3.7 python=3.7
@@ -47,13 +52,30 @@ conda activate py3.7
 conda install numpy
 ```
 
-## Install **FrontPanel** Driver [Google Drive](https://pins.opalkelly.com/downloads)
+**Notice: If Windows Command Prompt failed to execute above commands, please add Miniconda install path to PATH environment.**
 
-## Download **Memboard** Python Library [Github](https://drive.google.com/file/d/1HM5w99bJSepEbRAgtagARoK4IIzPZ-vO/view?usp=sharing)
+First open Windows environment variable:
 
-# FPGA Programming Guide
+    "Edit the system environment variables" -> "Environment Variables"
+In System variables tab, find "Path" variable and choose `"Edit..."` -> `"New"`. Type in:
 
-## FrontPanel HDL [Official webpage](https://docs.opalkelly.com/fpsdk/frontpanel-hdl/)
+    your_path_to/Miniconda/Scripts
+
+Proceed to finish **conda** installation.
+
+### 2.2.2. Install **FrontPanel** SDK [Google Drive](https://drive.google.com/file/d/1HM5w99bJSepEbRAgtagARoK4IIzPZ-vO/view?usp=sharing)
+
+After installing FrontPanel SDK, you should add FrontPanel Python API to system environment `"Path"`, see [2.2.1 Notice](#221-install-python37). The path should contains "ok.py" and "_ok.pyd" file and be similar to:
+
+    your_path_to/Opal Kelly/FrontPanelUSB/API/Python/3.7/x64
+
+**Notice: Install driver-only installer from [Opal Kelly](https://pins.opalkelly.com/downloads) if the above link is unavailable.**
+
+### 2.2.3. Download **Memboard** Python Library [Github](https://github.com/frazier-zh/memboard-python-api/archive/refs/heads/master.zip)
+
+# 3. FPGA Programming Guide
+
+## 3.1. FrontPanel HDL [Official webpage](https://docs.opalkelly.com/fpsdk/frontpanel-hdl/)
 
 The use of FrontPanel components to control and observe pieces of your FPGA design requires the instantiation of one or more modules in your toplevel HDL.
 
@@ -61,7 +83,7 @@ The host interface is the block which connects directly to pins on the FPGA whic
 
 The endpoints connect to a shared control bus on the host interface.  This internal bus is used to shuttle the endpoint connections to and from the host interface.  Several endpoints may be connected to this shared bus.  FrontPanel uses endpoint addresses to select which endpoint it is communicating with, so each endpoint must have its own unique address to work properly.
 
-### Endpoint Types
+### 3.1.1. Endpoint Types
 
 | ENDPOINT TYPE | ADDRESS RANGE | SYNC/ASYNC | DATA TYPE |
 |---|---|---|---|
@@ -72,7 +94,7 @@ The endpoints connect to a shared control bus on the host interface.  This inter
 |Pipe In|0x80 – 0x9F|Synchronous|Multi-byte transfer|
 |Pipe Out|0xA0 – 0xBF|Synchronous|Multi-byte transfer|
 
-### Wires
+### 3.1.2. Wires
 
 Wire is used to communicate asynchronous signal state between the host (PC) and the target (FPGA).  The okHostInterface supports up to 32 Wire In endpoints and 32 Wire Out endpoints connected to it.  To save bandwidth, all Wire In or Wire Out endpoints are updated at the same time and written or read by the host in one block.
 
@@ -80,7 +102,7 @@ All Wire In (to FPGA) endpoints are updated by the host at the same time with th
 
 All Wire Out (from FPGA) endpoints are likewise read by the host at the same time with a call to `UpdateWireOuts()`.  This call reads all 32 Wire Out endpoints and stores their values in an internal data structure.  The specific endpoint values can then be read out using `GetWireOutValue()`.
 
-### Triggers
+### 3.1.3. Triggers
 
 Triggers are used to communicate a singular event between the host and target.  A Trigger In provides a way for the host to convey a “one-shot” on an arbitrary FPGA clock.  A Trigger Out provides a way for the FPGA to signal the host with a “one-shot” or other single-event indicator.
 
@@ -88,7 +110,7 @@ Triggers are read and updated in a manner similar to Wires.  All Trigger Ins are
 
 Trigger Out information is read from the FPGA using the call `UpdateTriggerOuts()`.  Subsequent calls to `IsTriggered()` then return ‘true’ if the trigger has been activated since the last call to `UpdateTriggerOuts()`.
 
-### Pipes
+### 3.1.4. Pipes
 
 Pipe communication is the synchronous communication of one or more bytes of data.  In both Pipe In and Pipe Out cases, the host is the master.  Therefore, the FPGA must be able to accept (or provide) data on any time.  Wires, Triggers, and FIFOs can make things a little more negotiable.
 
@@ -102,7 +124,7 @@ Pipe data is transferred over the USB in 8-bit words but transferred to the FPGA
 
 When writing to Pipe Ins, the first byte written is transferred over the lower order bits of the data bus (7:0).  The second byte written is transferred over the higher order bits of the data bus (15:8).  Similarly, when reading from Pipe Outs, the lower order bits are the first byte read and the higher order bits are the second byte read.
 
-### Endpoint Data Widths
+### 3.1.5. Endpoint Data Widths
 
 |ENDPOINT TYPE|USB 2.0|USB 3.0|PCI EXPRESS|
 |---|---|---|---|
@@ -110,7 +132,7 @@ When writing to Pipe Ins, the first byte written is transferred over the lower o
 |Trigger|16|32|32|
 |Pipe|16|32|64|
 
-### Host Interface Clock Speed
+### 3.1.6. Host Interface Clock Speed
 
 The HDL host interface is a slave interface from the host. It runs at a fixed clock rate that is dependent upon the interface type for the device.
 
@@ -118,7 +140,7 @@ The HDL host interface is a slave interface from the host. It runs at a fixed cl
 - USB 3.0 interfaces run at 100.8 MHz (9.92 ns clock period)
 - PCI Express (x1) interfaces run at 50 MHz (20 ns clock period)
 
-## Verilog examples [See more examples](https://opalkelly.com/examples/)
+## 3.2. Verilog examples [See more examples](https://opalkelly.com/examples/)
 
 ```Verilog
 wire [17*1-1:0] ok2x;
@@ -142,13 +164,13 @@ okWireOut outA(
 );
 ```
 
-# Documents
+# 4. Documents
 
-## FrontPanel API Reference
+## 4.1. FrontPanel API Reference
 
     'install_path\Opal Kelly\FrontPanelUSB\Documentation'
 
-## FrontPanel SDK
+## 4.2. FrontPanel SDK
 
     https://docs.opalkelly.com/fpsdk
 
@@ -159,7 +181,7 @@ The FrontPanel SDK (Software Development Kit) is a flexible API (Application Pro
 - FPGA communication using wires, triggers, pipes
 - Abstraction to a common development platform for both USB and PCI Express devices
 
-## FrontPanel Examples
+## 4.3. FrontPanel Examples
 
     https://opalkelly.com/examples/
 
