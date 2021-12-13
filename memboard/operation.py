@@ -39,7 +39,7 @@ Notice:
     @allow_emulate should always be used for any atom operation to be
     created in the future.
 """
-@allow_emulate(output=True)
+@allow_emulate(output_bytes=2)
 def adc(op, channel=0):
     """ADC control
     """
@@ -68,7 +68,7 @@ def to_switch_no(pin):
 
     return group, channel, x
 
-@allow_emulate(output=False)
+@allow_emulate()
 def sw(op, pin=0, y=0, on=False):
     """Switch control
     """
@@ -91,7 +91,7 @@ def sw(op, pin=0, y=0, on=False):
         [[4, 3], [4, op_bytes], [8, channel], [4, x], [4, y], [1, on]]
     )
 
-@allow_emulate(output=False)
+@allow_emulate()
 def dac(op, channel=0, value=0x800):
     """DAC control
     """
@@ -114,7 +114,7 @@ def dac(op, channel=0, value=0x800):
         [[4, 2], [4, op_bytes], [8, channel], [16, value]]
     )
 
-@allow_emulate(output=False)
+@allow_emulate()
 def wait(time):
     """Ask FPGA to wait for a precise time period
     """
@@ -131,18 +131,13 @@ def wait(time):
             [[4, 4], [4, 0], [24, time]]
         )
 
-@allow_emulate(output=True)
+@allow_emulate(output_bytes=6)
 def time():
     """Get precise time from FPGA
     """
     return to_code(
         [[4, 6]]
     )
-
-@allow_emulate(output=False)
-def every(time):
-    return 
-
 
 """Registery of operation status"""
 power_config = ''

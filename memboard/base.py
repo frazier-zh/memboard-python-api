@@ -16,6 +16,8 @@ class Session(object):
         self.list = np.zeros(1, dtype=np.uint32)
         self.size = 0
         self.output_index = 0
+        self.output_list = []
+        self.ret = None
 
     def __iadd__(self, other):
         return self.add(other)
@@ -29,28 +31,24 @@ class Session(object):
             self.list = np.concatenate((self.list, other.list))
             self.size += other.size
 
-    def assign_output_index(self):
+    def assign_output_index(self, bytes=0):
         self.output_index += 1
-
+        self.output_list.append(bytes)
         return self.output_index
 
     def is_empty(self):
         return self.size > 0
 
+    def define_return(self, ret):
+        self.ret = ret
+
     def print_binary(self):
-        print("Operation")
         for ops in self.list:
-            print("0x{:08X}".format(ops))
+            print(" > ", ops.to_bytes(4, 'big'))
 
-
-def allow_emulate(output=False):
+def allow_emulate(output_bytes=0):
     """Decorator allow formalize definition of atom operations.
-    With output=False, there is no return value expected from operation.
-
-    With output=True, single return value is expected. Depending on whether
-    the operation is executed immediately or scheduled, the return value is
-    handled by either blocking native python, or non-blocking okBTPipeOut
-    through USB2.0 port.
+    With output_bytes=0, there is no return value expected from operation.
 
     The return value are thus labeled by integer placeholder and are updated
     by its value once the results are ready.   
@@ -63,12 +61,10 @@ def allow_emulate(output=False):
 
             if is_emulate():
                 session.add(code)
-                if output:
-                    return session.assign_output_index()
+                return session.assign_output_index(output_bytes)
             else:
-                execute(code)
-                if output:
-                    return wait_output()
+                execute_once(code)
+                # TODO: Add return value
 
         return wrapper
     return decorator
@@ -92,18 +88,15 @@ class start_emulate(object):
         else:
             return True
 
-def wait_output():
-    pass
-
-from . import debug_device as device
+import time
 from . import unit as u
 from .statistics import get_runtime
+from . import device
 
 class connect(object):
-    def __enter__(self):
-        device.initialize("../bin/1.0/TOP.bit")
-        if not device.verify():
-            raise RuntimeError("FPGA connection failed.")
+    def __enter__(self, path):
+        device.open()
+        device.load(path)
 
     def __exit__(self, exc_type, exc_value, tb):
         device.close()
@@ -122,32 +115,63 @@ def new_session():
             return
     session = Session()
 
-def execute(run, every=0, total=0, out=None):
+def execute_once(code):
+    pass
+
+import pickle
+
+def execute(run, every=0, total=0, out='temp'):
     global session
     new_session()
 
     with start_emulate():
         ret = run()
+    session.define_return(ret)
 
     run_time = 0
     for ops in session.list:
         run_time += get_runtime(ops)
 
     if run_time > every:
-        __module_logger.warn(f'Execution may take longer than the given interval\
+        __module_logger.warn(f'Execution takes longer than the given interval\
             {u.to_pretty(run_time)} > {u.to_pretty(every)}')
+        every = 1.5 * run_time
+        __module_logger.warn(f'Execution interval is set to {u.to_pretty(every)}')
 
-    # Print summary sheet
+    # Print output info
     print(f"""
-======= Execution summary =======
+======= Output list =======
 Total lines:        {session.size}
 Total output:       {session.output_index}
 Execution time:     {u.to_pretty(run_time)}
 
 Execution every:    {u.to_pretty(every)}
 Total time:         {u.to_pretty(total)}
+
+Output file:        ./{out}.dat
+                    ./{out}.pkl
 =================================
     """)
+    with open(out+'.pkl', 'wb') as file:
+        pickle.dump(ret, file)
 
-    #session.print_binary()
-    #print(ret)
+    device.trigger_in(0x40, 0) # Reset logic block
+    device.trigger_in(0x40, 1) # Reset memory block
+
+    device.pipe_in(0x81, device.to_byte_single(device.to_tick(every), 6))# Load clock counter
+    device.pipe_in(0x80, device.to_byte(session.list)) # Load program
+
+    data_result = bytearray(session.output_list.count(2)*2) # Pipe out container
+    time_result = bytearray(session.output_list.count(6)*6) # Pipe out container
+
+    device.wire_in(0x00, 1) # Enable execution
+    start_time = time.time()
+    stop_time = total/u.s
+    with open(out+'.dat', 'wb') as file:
+        while time.time()-start_time<stop_time:
+            if device.wait_trigger_out(0x60):
+                device.pipe_out(0xA1, time_result)
+                device.pipe_out(0xA0, data_result)
+                file.write(time_result)
+                file.write(data_result)
+        device.wire_in(0x00, 0) # Stop execution

@@ -1,9 +1,6 @@
 memboard_test.py
+memboard_test_1.py
 
 __pycache__/
 bin/
 .vscode/
-
-
-ok.py
-_ok.pyd
