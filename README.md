@@ -41,6 +41,12 @@ Swtich set speed 190ns ?
 
 1. Install Miniconda3 Windows 64-bit [Official webpage](https://docs.conda.io/en/latest/miniconda.html)
 
+```
+conda create -n py3.7 python=3.7
+conda activate py3.7
+conda install numpy
+```
+
 ## Install **FrontPanel** Driver [Google Drive](https://pins.opalkelly.com/downloads)
 
 ## Download **Memboard** Python Library [Github](https://drive.google.com/file/d/1HM5w99bJSepEbRAgtagARoK4IIzPZ-vO/view?usp=sharing)
