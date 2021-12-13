@@ -94,9 +94,12 @@ from .statistics import get_runtime
 from . import device
 
 class connect(object):
-    def __enter__(self, path):
+    def __init__(self, path):
+        self.path = path
+
+    def __enter__(self):
         device.open()
-        device.load(path)
+        device.load(self.path)
 
     def __exit__(self, exc_type, exc_value, tb):
         device.close()

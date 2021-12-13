@@ -22,5 +22,5 @@ def run():
     return results
 
 
-with mb.connect():
+with mb.connect('top.bit'):
     mb.execute(run, every=200 *u.us, total=5 *u.s, out='scan')

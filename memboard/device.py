@@ -9,7 +9,7 @@ __module_logger = logging.getLogger(__name__)
 
 def open():
     if __device.GetDeviceCount() == 0:
-        raise RuntimeError('FPGA connection failed.')
+        raise RuntimeError('FPGA device not found.')
     if __device.OpenBySerial(''):
         raise RuntimeError('FPGA connection failed.')
 
