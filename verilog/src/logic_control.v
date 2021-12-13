@@ -40,19 +40,18 @@ module logic_control(
 	 output reg adc_cs,
 	 output reg dac_cs,
 	 output reg timer_cs,
-	 output reg clock_cs,
 	 input switch_rdy,
 	 input adc_rdy,
 	 input dac_rdy,
 	 input timer_rdy,
-	 input clock_rdy,
 	 
 	 input [13:0] adc_out,
+	 input [47:0] time_out,
 	 
 	 // Clock
-	 input clock_cd,
-	 output reg clock_en,
-	 output reg clock_clr
+	 output reg cd_en,
+	 input cd_rdy,
+	 output reg clock_en
     );
 
 reg [7:0] time_count;
@@ -73,23 +72,25 @@ localparam
 	s_call = 2,
 	s_wait = 3,
 	s_out_adc = 4,
-	s_standby = 5;
+	s_out_time = 5,
+	s_standby = 6;
 reg [3:0] state;
 
 always @(posedge clk) begin
 	if (rst) begin
 		state <= s_idle;
 		mblock_clr <= 1;
-		clock_clr <= 1;
+		cd_en <= 0;
+		clock_en <= 0;
 		rdy <= 0;
 	end else begin
 		case (state)
 			s_idle:
 				if (en == 1) begin
 					state <= s_read;
-					clock_en <= 1;
 					mblock_clr <= 0;
-					clock_clr <= 0;
+					cd_en <= 1;
+					clock_en <= 1;
 					rdy <= 0;
 				end else begin
 					state <= s_idle;
@@ -117,9 +118,9 @@ always @(posedge clk) begin
 							2: dac_cs <= 1;
 							3: switch_cs <= 1;
 							4: timer_cs <= 1;
-							6: clock_cs <= 1;
+							5: state <= s_out_time;
 						endcase
-					3: {adc_cs, dac_cs, switch_cs, timer_cs, clock_cs} <= 5'b0;
+					3: {adc_cs, dac_cs, switch_cs, timer_cs} <= 5'b0;
 					4: begin
 							state <= s_wait;
 							time_enable <= 0;
@@ -127,7 +128,7 @@ always @(posedge clk) begin
 				endcase
 				
 			s_wait:
-				if ({adc_rdy, dac_rdy, switch_rdy, timer_rdy, clock_rdy} == 5'b1111) begin
+				if ({adc_rdy, dac_rdy, switch_rdy, timer_rdy} == 5'b1111) begin
 					if (dev_no == 1) begin
 						state <= s_out_adc;
 						time_enable <= 1;
@@ -151,13 +152,29 @@ always @(posedge clk) begin
 						end
 				endcase
 				
+			s_out_time:
+				case (time_count)
+					1: begin
+							data_out <= time_out[15:0];
+							data_out_en <= 1;
+						end
+					2: data_out <= time_out[31:16];
+					3: data_out <= time_out[47:32];
+					4: begin
+							state <= s_read;
+							data_out_en <= 0;
+							time_enable <= 0;
+						end
+				endcase
+				
 			s_standby:
 				if (en == 0) begin
 					state <= s_idle;
 					mblock_clr <= 1;
-					clock_clr <= 1;
+					cd_en <= 0;
+					clock_en <= 0;
 				end else begin
-					if (clock_cd) begin
+					if (cd_rdy) begin
 						state <= s_idle;
 						mblock_clr <= 1;
 					end else begin

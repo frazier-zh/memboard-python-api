@@ -7,50 +7,51 @@ module TOP(
 	output LDAC_DAC,
 	output CS_DAC,
 	output CLR_DAC,
-	output RESET_switch1,
-	output CS_switch1,
-	output [3:0] AX_switch1,
-	output [2:0] AY_switch1,
-	output Strobe_switch1,
-	output DATA_switch1,
-	output RESET_switch2,
-	output CS_switch2,
-	output [3:0] AX_switch2,
-	output [2:0] AY_switch2,
-	output Strobe_switch2,
-	output DATA_switch2,
-	output RESET_switch3,
-	output CS_switch3,
-	output [3:0] AX_switch3,
-	output [2:0] AY_switch3,
-	output Strobe_switch3,
-	output DATA_switch3,
-	output RESET_switch4,
-	output CS_switch4,
-	output [3:0] AX_switch4,
-	output [2:0] AY_switch4,
-	output Strobe_switch4,
-	output DATA_switch4,
-	output RESET_switch5,
-	output CS_switch5,
-	output [3:0] AX_switch5,
-	output [2:0] AY_switch5,
-	output Strobe_switch5,
-	output DATA_switch5,
-	output RESET_switch6,
-	output CS_switch6,
-	output [3:0] AX_switch6,
-	output [2:0] AY_switch6,
-	output Strobe_switch6,
-	output DATA_switch6,
+	output RESET_SW1,
+	output CS_SW1,
+	output [3:0] AX_SW1,
+	output [2:0] AY_SW1,
+	output STROBE_SW1,
+	output DATA_SW1,
+	output RESET_SW2,
+	output CS_SW2,
+	output [3:0] AX_SW2,
+	output [2:0] AY_SW2,
+	output STROBE_SW2,
+	output DATA_SW2,
+	output RESET_SW3,
+	output CS_SW3,
+	output [3:0] AX_SW3,
+	output [2:0] AY_SW3,
+	output STROBE_SW3,
+	output DATA_SW3,
+	output RESET_SW4,
+	output CS_SW4,
+	output [3:0] AX_SW4,
+	output [2:0] AY_SW4,
+	output STROBE_SW4,
+	output DATA_SW4,
+	output RESET_SW5,
+	output CS_SW5,
+	output [3:0] AX_SW5,
+	output [2:0] AY_SW5,
+	output STROBE_SW5,
+	output DATA_SW5,
+	output RESET_SW6,
+	output CS_SW6,
+	output [3:0] AX_SW6,
+	output [2:0] AY_SW6,
+	output STROBE_SW6,
+	output DATA_SW6,
 	input CLK,
 	output SCLK_ADC,
    output CNVST_ADC,
    output CS_ADC,
    input BUSY_ADC,
    output reg ADDR_ADC=0,
-   input DoutA_ADC,
-	input DoutB_ADC,
+   input DOUTA_ADC,
+	input DOUTB_ADC,
+	
 	output [7:0] LED,
 	
 	//OkHostInterface
@@ -83,7 +84,7 @@ okWireOR #(.N(4)) wireOR (.ok2(ok2), .ok2s(ok2x));
 wire clock_rst, fifo_rst, mem_rst, logic_rst, logic_en, logic_rdy, logic_rdy_trig;
 wire [15:0] trig_in, wire_in;
 
-assign {clock_rst, fifo_rst, mem_rst, logic_rst} = trig_in[1:0];
+assign {fifo_rst, mem_rst, logic_rst} = trig_in[2:0];
 assign logic_en = wire_in[0];
 assign LED = {7'b0, logic_rdy};
 
@@ -171,20 +172,17 @@ okPipeIn pipe81(
 	.ep_dataout(time16_in)
 );
 
-wire clock_cs, clock_rdy, clock_cd, clock_en, clock_clr;
+wire cd_en, cd_rdy, clock_en;
 
 multiclock_interface clock(
 	.clk(CLK),
-	.rst(clock_rst),
 	.ti_clk(ti_clk),
 	.data_write(time16_write),
 	.data_in(time16_in),
+	.cd_en(cd_en),
+	.cd_rdy(cd_rdy),
 	.en(clock_en),
-	.cd(clock_cd),
-	.cs(clock_cs),
-	.clr(clock_clr),
-	.data_out(time_out),
-	.rdy(clock_rdy)
+	.data_out(time_out)
 );
 
 // Main logic interface
@@ -211,29 +209,36 @@ logic_control logic_ctrl(
 	.data_bus(data_bus),
 	.data_out_en(data_write),
 	.data_out(data_out),
-	.switch_cs(switch_cs), .adc_cs(adc_cs), .dac_cs(dac_cs), .timer_cs(timer_cs), .clock_cs(clock_cs),
-	.switch_rdy(switch_rdy), .adc_rdy(adc_rdy), .dac_rdy(dac_rdy), .timer_rdy(timer_rdy), .clock_rdy(clock_rdy),
+	.switch_cs(switch_cs), .adc_cs(adc_cs), .dac_cs(dac_cs), .timer_cs(timer_cs),
+	.switch_rdy(switch_rdy), .adc_rdy(adc_rdy), .dac_rdy(dac_rdy), .timer_rdy(timer_rdy),
 	.adc_out(adc_out),
 	.time_out(time_out),
-	.clock_cd(clock_cd),
-	.clock_en(clock_en),
-	.clock_clr(clock_clr)
+	.cd_en(cd_en),
+	.cd_rdy(cd_rdy),
+	.clock_en(clock_en)
 );
 
 // Device definitions
 
+wire AX_SW, AY_SW, STROBE_SW, DATA_SW;
+assign AX_SW1 = AX_SW, AX_SW2 = AX_SW, AX_SW3 = AX_SW, AX_SW4 = AX_SW, AX_SW5 = AX_SW, AX_SW6 = AX_SW;
+assign AY_SW1 = AY_SW, AY_SW2 = AY_SW, AY_SW3 = AY_SW, AY_SW4 = AY_SW, AY_SW5 = AY_SW, AY_SW6 = AY_SW;
+assign STROBE_SW1 = STROBE_SW, STROBE_SW2 = STROBE_SW, STROBE_SW3 = STROBE_SW, STROBE_SW4 = STROBE_SW, STROBE_SW5 = STROBE_SW, STROBE_SW6 = STROBE_SW;
+assign DATA_SW1 = DATA_SW, DATA_SW2 = DATA_SW, DATA_SW3 = DATA_SW, DATA_SW4 = DATA_SW, DATA_SW5 = DATA_SW, DATA_SW6 = DATA_SW;
+
 switch_interface_group switch(
-	.RESET_switch1(RESET_switch1), .CS_switch1(CS_switch1), .AX_switch1(AX_switch1), .AY_switch1(AY_switch1), .Strobe_switch1(Strobe_switch1), .DATA_switch1(DATA_switch1),
-	.RESET_switch2(RESET_switch2), .CS_switch2(CS_switch2), .AX_switch2(AX_switch2), .AY_switch2(AY_switch2), .Strobe_switch2(Strobe_switch2), .DATA_switch2(DATA_switch2),
-	.RESET_switch3(RESET_switch3), .CS_switch3(CS_switch3), .AX_switch3(AX_switch3), .AY_switch3(AY_switch3), .Strobe_switch3(Strobe_switch3), .DATA_switch3(DATA_switch3),
-	.RESET_switch4(RESET_switch4), .CS_switch4(CS_switch4), .AX_switch4(AX_switch4), .AY_switch4(AY_switch4), .Strobe_switch4(Strobe_switch4), .DATA_switch4(DATA_switch4),
-	.RESET_switch5(RESET_switch5), .CS_switch5(CS_switch5), .AX_switch5(AX_switch5), .AY_switch5(AY_switch5), .Strobe_switch5(Strobe_switch5), .DATA_switch5(DATA_switch5),
-	.RESET_switch6(RESET_switch6), .CS_switch6(CS_switch6), .AX_switch6(AX_switch6), .AY_switch6(AY_switch6), .Strobe_switch6(Strobe_switch6), .DATA_switch6(DATA_switch6),
-	.clk(CLK), .cs(switch_cs), .rdy(switch_rdy), .op(op_bus), .addr(addr_bus), .data_in(data_bus)
+	.RESET_SW1(RESET_SW1), .CS_SW1(CS_SW1),
+	.RESET_SW2(RESET_SW2), .CS_SW2(CS_SW2),
+	.RESET_SW3(RESET_SW3), .CS_SW3(CS_SW3),
+	.RESET_SW4(RESET_SW4), .CS_SW4(CS_SW4),
+	.RESET_SW5(RESET_SW5), .CS_SW5(CS_SW5),
+	.RESET_SW6(RESET_SW6), .CS_SW6(CS_SW6),
+	.clk(CLK), .cs(switch_cs), .rdy(switch_rdy), .op(op_bus), .addr(addr_bus), .data_in(data_bus),
+	.AX(AX_SW), .AY(AY_SW), .STROBE(STROBE_SW), .DATA(DATA_SW)
 );
 
 adc_interface_ad7367 adc(
-	.BUSY(BUSY_ADC), .SCLK(SCLK_ADC), .CNVST(CNVST_ADC), .CS(CS_ADC), .DOUTA(DoutA_ADC), .DOUTB(DoutB_ADC),
+	.BUSY(BUSY_ADC), .SCLK(SCLK_ADC), .CNVST(CNVST_ADC), .CS(CS_ADC), .DOUTA(DOUTA_ADC), .DOUTB(DOUTB_ADC),
 	.clk(CLK), .cs(adc_cs), .rdy(adc_rdy), .op(op_bus), .addr(addr_bus), .data_out(adc_out)
 );
 
