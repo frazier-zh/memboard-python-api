@@ -8,6 +8,8 @@ def run():
     top_pin = 29
     bottom_pin = 84
 
+    apply(pin=1, v=2.5 *u.V)
+
     return time(), measure(pin=top_pin, drive_pin=bottom_pin, v=1 *u.V)
 
 with mb.connect('top.bit'):
