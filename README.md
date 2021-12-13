@@ -40,28 +40,17 @@ Swtich set speed 190ns ?
 Install **Miniconda3 Windows 64-bit** [Official webpage](https://docs.conda.io/en/latest/miniconda.html).
 **Notice:** Allow Miniconda to modify PATH variables.
 
-Open Windows Command Prompt by typing "cmd" in windows search bar.
+Open Anaconda Command Prompt.
 
-    ```
-    conda create -n py3.7 python=3.7
-    conda activate py3.7
-    conda install numpy
-    ```
-
-**Notice: If Windows Command Prompt failed to execute above commands, please add Miniconda install path to PATH environment.**
-
-First open Windows environment variable:
-
-    "Edit the system environment variables" -> "Environment Variables"
-In System variables tab, find "Path" variable and choose `"Edit..."` -> `"New"`. Type in:
-
-    your_path_to/Miniconda/Scripts
-
-Proceed to finish **conda** installation.
+```
+conda create -n py3.7 python=3.7
+conda activate py3.7
+conda install numpy
+```
 
 ### 2.2.2. Install **FrontPanel** SDK [Google Drive](https://drive.google.com/file/d/1HM5w99bJSepEbRAgtagARoK4IIzPZ-vO/view?usp=sharing)
 
-After installing FrontPanel SDK, you should add FrontPanel Python API to system environment `"Path"`, see [2.2.1 Notice](#221-install-python37). The path should contains "ok.py" and "_ok.pyd" file and be similar to:
+After installing FrontPanel SDK, you should add FrontPanel Python API to system environment `"Path"`. The path should contains "ok.py" and "_ok.pyd" file and be similar to:
 
     your_path_to/Opal Kelly/FrontPanelUSB/API/Python/3.7/x64
 
@@ -73,9 +62,14 @@ After installing FrontPanel SDK, you should add FrontPanel Python API to system 
 
 ## Python Example
 
-    ```Python
-    import memboard as mb
-    ```
+```Python
+import memboard as mb
+from memboard import wait, time, apply, measure
+import memboard.unit as u
+
+import numpy as np # Matrix/array operation library
+
+```
 
 ## API Reference
 
@@ -162,27 +156,27 @@ The HDL host interface is a slave interface from the host. It runs at a fixed cl
 
 ## 3.2. Verilog examples [See more examples](https://opalkelly.com/examples/)
 
-    ```Verilog
-    wire [17*1-1:0] ok2x;
-    okHost okHI(
-        .hi_in(hi_in), .hi_out(hi_out), .hi_inout(hi_inout), .hi_aa(hi_aa), .ti_clk(ti_clk),
-        .ok1(ok1), .ok2(ok2)
-    );
-    okWireOR #(.N(2)) wireOR (.ok2(ok2), .ok2s(ok2x));
+```Verilog
+wire [17*1-1:0] ok2x;
+okHost okHI(
+    .hi_in(hi_in), .hi_out(hi_out), .hi_inout(hi_inout), .hi_aa(hi_aa), .ti_clk(ti_clk),
+    .ok1(ok1), .ok2(ok2)
+);
+okWireOR #(.N(2)) wireOR (.ok2(ok2), .ok2s(ok2x));
 
-    okWireIn inA(
-        .ok1(ok1),
-        .ep_addr(8'h00),
-        .ep_dataout (dataA)
-    );
-    
-    okWireOut outA(
-        .ok1(ok1),
-        .ok2(ok2x[0*17 +: 17]),
-        .ep_addr (8'h20),
-        .ep_datain (dataA)
-    );
-    ```
+okWireIn inA(
+    .ok1(ok1),
+    .ep_addr(8'h00),
+    .ep_dataout (dataA)
+);
+
+okWireOut outA(
+    .ok1(ok1),
+    .ok2(ok2x[0*17 +: 17]),
+    .ep_addr (8'h20),
+    .ep_datain (dataA)
+);
+```
 
 ## 3.3. Documents
 
