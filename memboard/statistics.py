@@ -30,8 +30,8 @@ _power_config = {
     ''
 }
 
-def to_voltage(power_config, value):
-    return 0 * u.V
+def to_voltage(value):
+    return value/0xFFF*24-12
 
-def to_int(power_config, voltage):
-    return 0x800
+def to_int(voltage):
+    return int((voltage+12/24)*0xFFF)

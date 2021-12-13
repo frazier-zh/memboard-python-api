@@ -139,10 +139,6 @@ def time():
         [[4, 6]]
     )
 
-"""Registery of operation status"""
-power_config = ''
-
-
 """Definition of compound operation
     Each compound operation consists of multiple atom operation.
     In non-blocking mode, for-statement and if-else statement is allowed but
@@ -191,7 +187,7 @@ def apply(pin, v=None):
     
     # Just connect to DAC if voltage is not given
     if v is not None:
-        dac(op='enable', channel=channel, value=to_int(power_config, v))
+        dac(op='enable', channel=channel, value=to_int(v))
     else:
         __module_logger.warn(f'Pin {pin} is connected to DAC-{channel} by default.')
 
