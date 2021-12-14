@@ -7,3 +7,6 @@ src/*
 !src/*.cgp
 !src/*.prj
 !src/top.bit
+!src/top_isim.tcl
+!src/top_isim.prj
+!src/top_isim.bat

@@ -176,6 +176,7 @@ Memory file:        ./{out}.mem*
     # Start execution
     device.trigger_in(0x40, 0) # Reset logic block
     device.trigger_in(0x40, 1) # Reset memory block
+    device.trigger_in(0x40, 2) # Reset fifo blocks
 
     device.pipe_in(0x81, device.to_byte_single(device.to_tick(every), 6))# Load clock counter
     device.pipe_in(0x80, device.to_byte(__session.list)) # Load program
@@ -186,7 +187,7 @@ Memory file:        ./{out}.mem*
     device.wire_in(0x00, 1) # Enable execution
     start_time = time.time()
     stop_time = total/u.s
-    with open(out+'.dat', 'wb') as file:
+    with open(out+'.out', 'wb') as file:
         while time.time()-start_time<stop_time:
             if device.wait_trigger_out(0x60, 0):
                 device.pipe_out(0xA1, time_result)

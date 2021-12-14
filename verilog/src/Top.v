@@ -205,7 +205,7 @@ logic_control logic_ctrl(
 	.mblock_en(mblock_en),
 	.mblock_clr(mblock_clr),
 	.mblock_valid(mblock_valid),
-   	.dev_no(dev_no),
+	.dev_no(dev_no),
 	.data_bus(data_bus),
 	.data_out_en(data_write),
 	.data_out(data_out),

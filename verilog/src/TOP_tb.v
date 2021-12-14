@@ -1,5 +1,4 @@
 `timescale 1ns / 1ps
-
 ////////////////////////////////////////////////////////////////////////////////
 // Company: 
 // Engineer:
@@ -88,11 +87,11 @@ module top_tb;
 	                                  //           host interface checks for ready (0-255)
 	parameter PostReadyDelay = 5;     // REQUIRED: # of clocks after ready is asserted and
 	                                  //           check that the block transfer begins (0-255)
-	parameter pipeInSize = 1024;      // REQUIRED: byte (must be even) length of default
+	parameter pipeInSize = 88;        // REQUIRED: byte (must be even) length of default
 	                                  //           PipeIn; Integer 0-2^32
-	parameter pipeOutSize = 1024;     // REQUIRED: byte (must be even) length of default
+	parameter pipeOutSize = 20;       // REQUIRED: byte (must be even) length of default
 	                                  //           PipeOut; Integer 0-2^32
-	parameter pipeIn2Size = 1024;
+	parameter pipeIn2Size = 6;
 
 	integer k;
 	reg  [7:0]  pipeIn [0:(pipeInSize-1)];
@@ -125,27 +124,46 @@ module top_tb;
 	//    available in Opal Kelly documentation and online support tutorial.
 	//------------------------------------------------------------------------
 
+	integer f;
 
 	initial begin
 		FrontPanelReset;
 
-		$readmemh("../../code.mem", pipeIn);
-		
+		ActivateTriggerIn(8'h40, 0);
+		ActivateTriggerIn(8'h40, 1);
+		ActivateTriggerIn(8'h40, 2);
+
+		$readmemh("../../scan.mem1", pipeIn);
+		$readmemh("../../scan.mem2", pipeIn2);
+		WriteToPipeIn2(8'h81, pipeIn2Size);
+		WriteToPipeIn(8'h80, pipeInSize);
+
+		SetWireInValue(8'h00, 1, 16'hffff);
+		UpdateWireIns;
+
+		// Start execution
+		#20000
+		ReadFromPipeOut(8'hA0, pipeOutSize);
+
+		f = $fopen("../../scan.out", "w");
+		for (k=0; k<pipeOutSize; k=k+1)
+			$fwrite(f, "%02x\n", pipeOut[k]);
+		$fclose(f);
 	end
 	
 	// Clock
 	always begin
-		clk = 1;
-		#5 clk = 0;
+		CLK = 1;
+		#5 CLK = 0;
 	end
 	
 	// ADC Behaviour
-	always @(negedge CNVST) begin
-		#40 BUSY = 1;
-		#700 BUSY = 0;
+	always @(negedge CNVST_ADC) begin
+		#40 BUSY_ADC = 1;
+		#700 BUSY_ADC = 0;
 	end
 	
-	always @(negedge SCLK) begin
+	always @(negedge SCLK_ADC) begin
 		#20
 		DOUTA_ADC <= $random;
 		DOUTB_ADC <= $random;
