@@ -39,7 +39,7 @@ Notice:
     @allow_emulate should always be used for any atom operation to be
     created in the future.
 """
-@allow_emulate(output_bytes=2)
+@allow_emulate(width=1)
 def adc(op, channel=0):
     """ADC control
     """
@@ -131,7 +131,7 @@ def wait(time):
             [[4, 4], [4, 0], [24, time]]
         )
 
-@allow_emulate(output_bytes=6)
+@allow_emulate(width=3)
 def time():
     """Get precise time from FPGA
     """

@@ -14,13 +14,12 @@ def run():
 
     for i in range(5):
         results[0, i] = time()
-        results[2, i] = measure(pin=bottom_pin, drive_pin=top_pin_list[i], v=0.1 *u.V)
-        wait(10 *u.us)
+        results[1, i] = measure(pin=bottom_pin, drive_pin=top_pin_list[i], v=0.1 *u.V)
+        wait(5 *u.us)
 
     return results
 
 
 with mb.connect('../verilog/src/top.bit', debug=True):
     mb.register(run)
-    mb.output_mem()
     mb.execute(every=200 *u.us, total=5 *u.s, out='scan')

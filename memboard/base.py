@@ -16,6 +16,7 @@ class Session(object):
         self.size = 0
         self.output_index = 0
         self.output_list = []
+        self.output_size = 0
         self.ret = None
 
     def __iadd__(self, other):
@@ -33,9 +34,12 @@ class Session(object):
     def get_code(self):
         return self.list
 
-    def assign_output(self, bytes=0):
+    def assign_output(self, width=0):
+        if width==0:
+            return
         self.output_index += 1
-        self.output_list.append(bytes)
+        self.output_list.append(width)
+        self.output_size += width
         return self.output_index
 
     def register_output(self, ret):
@@ -49,7 +53,7 @@ class Session(object):
 
 __session = Session()
 
-def allow_emulate(output_bytes=0):
+def allow_emulate(width=0):
     """Decorator allow formalize definition of atom operations.
     With output_bytes=0, there is no return value expected from operation.
 
@@ -64,7 +68,7 @@ def allow_emulate(output_bytes=0):
             global __session
             if is_emulate():
                 __session.register_code(code)
-                return __session.assign_output(output_bytes)
+                return __session.assign_output(width)
             else:
                 pass
                 # TODO: execute_once(code)
@@ -144,18 +148,32 @@ def execute(every=0, total=0, out='temp'):
     # Print output info
     print(f"""
 ======== Execution Summary ========
-Total lines:        {__session.size}
-Total output:       {__session.output_index}
+Total commands:     {__session.size}
+Total outputs:      {__session.output_size}
 Execution time:     {u.to_pretty(run_time)}
-
 Execution every:    {u.to_pretty(every)}
 Total time:         {u.to_pretty(total)}
-
 Output file:        ./{out}.dat
-                    ./{out}.pkl
+Format file:        ./{out}.pkl
+Memory file:        ./{out}.mem*
 ===================================
     """)
 
+    # For debug purpose only
+    with open(out+'.mem1', 'w') as file:
+        mem = device.to_byte(__session.list)
+        length = len(mem)
+        for i in range(int(length/4)):
+            file.write('{:02x} {:02x} {:02x} {:02x}\n'\
+                .format(mem[4*i], mem[4*i+1], mem[4*i+2], mem[4*i+3]))
+
+    # For debug purpose only
+    with open(out+'.mem2', 'w') as file:
+        mem = device.to_byte_single(device.to_tick(every), 6)
+        for v in mem:
+            file.write('{:02x} '.format(v))
+
+    # Start execution
     device.trigger_in(0x40, 0) # Reset logic block
     device.trigger_in(0x40, 1) # Reset memory block
 
@@ -176,14 +194,3 @@ Output file:        ./{out}.dat
                 file.write(time_result)
                 file.write(data_result)
         device.wire_in(0x00, 0) # Stop execution
-
-"""For debug purpose only
-"""
-def output_mem(path='./'):
-    global __session
-    with open(path+'code.mem', 'w') as file:
-        code = device.to_byte(__session.list)
-        length = len(code)
-        for i in range(int(length/4)):
-            file.write('{:02x} {:02x} {:02x} {:02x}\n'\
-                .format(code[4*i], code[4*i+1], code[4*i+2], code[4*i+3]))

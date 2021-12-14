@@ -129,8 +129,8 @@ module top_tb;
 	initial begin
 		FrontPanelReset;
 
-		$readmemh("", pipeIn);
-		$readmemh("", pipeIn2);
+		$readmemh("../../code.mem", pipeIn);
+		
 	end
 	
 	// Clock

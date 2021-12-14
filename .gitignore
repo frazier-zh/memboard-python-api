@@ -1,6 +1,6 @@
 __pycache__/
 .vscode/
 
-code.mem
-scan.dat
-scan.pkl
+*.pkl
+*.dat
+*.mem*
