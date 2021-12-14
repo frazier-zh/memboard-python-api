@@ -22,22 +22,22 @@
 // 
 ////////////////////////////////////////////////////////////////////////////////
 
-module TOP_tb;
+module top_tb;
 	// Inputs
 	reg CLK;
 	
 	// Outputs
 	wire CS_DAC;
-	wire CS_switch1;
-	wire CS_switch2;
-	wire CS_switch3;
-	wire CS_switch4;
-	wire CS_switch5;
-	wire CS_switch6;
+	wire CS_SW1;
+	wire CS_SW2;
+	wire CS_SW3;
+	wire CS_SW4;
+	wire CS_SW5;
+	wire CS_SW6;
 	
 	reg BUSY_ADC;
-	reg DoutA_ADC;
-	reg DoutB_ADC;
+	reg DOUTA_ADC;
+	reg DOUTB_ADC;
 	wire SCLK_ADC;
 	wire CNVST_ADC;
 	wire CS_ADC;
@@ -56,19 +56,19 @@ module TOP_tb;
 		.CLK(CLK), 
 		
 		.CS_DAC(CS_DAC), 
-		.CS_switch1(CS_switch1), 
-		.CS_switch2(CS_switch2), 
-		.CS_switch3(CS_switch3), 
-		.CS_switch4(CS_switch4), 
-		.CS_switch5(CS_switch5), 
-		.CS_switch6(CS_switch6), 
+		.CS_SW1(CS_SW1), 
+		.CS_SW2(CS_SW2), 
+		.CS_SW3(CS_SW3), 
+		.CS_SW4(CS_SW4), 
+		.CS_SW5(CS_SW5), 
+		.CS_SW6(CS_SW6), 
 		
 		.SCLK_ADC(SCLK_ADC), 
 		.CNVST_ADC(CNVST_ADC), 
 		.CS_ADC(CS_ADC), 
 		.BUSY_ADC(BUSY_ADC), 
-		.DoutA_ADC(DoutA_ADC), 
-		.DoutB_ADC(DoutB_ADC), 
+		.DOUTA_ADC(DOUTA_ADC), 
+		.DOUTB_ADC(DOUTB_ADC), 
 		
 		.LED(LED), 
 		.hi_in(hi_in), 
@@ -80,19 +80,57 @@ module TOP_tb;
 		.hi_muxsel(hi_muxsel)
 	);
 
+	//------------------------------------------------------------------------
+	// Begin okHostInterface simulation user configurable  global data
+	//------------------------------------------------------------------------
+	parameter BlockDelayStates = 5;   // REQUIRED: # of clocks between blocks of pipe data
+	parameter ReadyCheckDelay = 5;    // REQUIRED: # of clocks before block transfer before
+	                                  //           host interface checks for ready (0-255)
+	parameter PostReadyDelay = 5;     // REQUIRED: # of clocks after ready is asserted and
+	                                  //           check that the block transfer begins (0-255)
+	parameter pipeInSize = 1024;      // REQUIRED: byte (must be even) length of default
+	                                  //           PipeIn; Integer 0-2^32
+	parameter pipeOutSize = 1024;     // REQUIRED: byte (must be even) length of default
+	                                  //           PipeOut; Integer 0-2^32
+	parameter pipeIn2Size = 1024;
+
+	integer k;
+	reg  [7:0]  pipeIn [0:(pipeInSize-1)];
+	initial for (k=0; k<pipeInSize; k=k+1) pipeIn[k] = 8'h00;
+
+	reg  [7:0]  pipeOut [0:(pipeOutSize-1)];
+	initial for (k=0; k<pipeOutSize; k=k+1) pipeOut[k] = 8'h00;
+
+	reg  [7:0]  pipeIn2 [0:(pipeIn2Size-1)];
+	initial for (k=0; k<pipeIn2Size; k=k+1) pipeIn2[k] = 8'h00;
+
+	//------------------------------------------------------------------------
+	//  Available User Task and Function Calls:
+	//    FrontPanelReset;                  // Always start routine with FrontPanelReset;
+	//    SetWireInValue(ep, val, mask);
+	//    UpdateWireIns;
+	//    UpdateWireOuts;
+	//    GetWireOutValue(ep);
+	//    ActivateTriggerIn(ep, bit);       // bit is an integer 0-15
+	//    UpdateTriggerOuts;
+	//    IsTriggered(ep, mask);            // Returns a 1 or 0
+	//    WriteToPipeIn(ep, length);        // passes pipeIn array data
+	//    ReadFromPipeOut(ep, length);      // passes data to pipeOut array
+	//    WriteToBlockPipeIn(ep, blockSize, length);    // pass pipeIn array data; blockSize and length are integers
+	//    ReadFromBlockPipeOut(ep, blockSize, length);  // pass data to pipeOut array; blockSize and length are integers
+	//
+	//    *Pipes operate by passing arrays of data back and forth to the user's
+	//    design.  If you need multiple arrays, you can create a new procedure
+	//    above and connect it to a differnet array.  More information is
+	//    available in Opal Kelly documentation and online support tutorial.
+	//------------------------------------------------------------------------
+
+
 	initial begin
-		// Initialize Inputs
-		CLK = 0;
-		BUSY_ADC = 0;
-		DoutA_ADC = 0;
-		DoutB_ADC = 0;
-		hi_in = 0;
+		FrontPanelReset;
 
-		// Wait 100 ns for global reset to finish
-		#100;
-        
-		// Add stimulus here
-
+		$readmemh("", pipeIn);
+		$readmemh("", pipeIn2);
 	end
 	
 	// Clock
@@ -109,9 +147,12 @@ module TOP_tb;
 	
 	always @(negedge SCLK) begin
 		#20
-		DoutA_ADC <= $random;
-		DoutB_ADC <= $random;
+		DOUTA_ADC <= $random;
+		DOUTB_ADC <= $random;
 	end
-      
+
+	`include "./oksim/okHostCalls.v"   // Do not remove!  The tasks, functions, and data stored
+	                                   // in okHostCalls.v must be included here.
+
 endmodule
 
