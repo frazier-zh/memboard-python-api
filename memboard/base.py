@@ -5,7 +5,6 @@ from functools import wraps
 __module_logger = logging.getLogger(__name__)
 
 
-session = None
 """Session
     Memboard module holds singleton instance of session which can only be created
 at import of the module.
@@ -22,7 +21,7 @@ class Session(object):
     def __iadd__(self, other):
         return self.add(other)
 
-    def add(self, other):
+    def register_code(self, other):
         if isinstance(other, np.ndarray):
             self.list = np.concatenate((self.list, other))
             self.size += other.shape[0]
@@ -31,20 +30,24 @@ class Session(object):
             self.list = np.concatenate((self.list, other.list))
             self.size += other.size
 
-    def assign_output_index(self, bytes=0):
+    def get_code(self):
+        return self.list
+
+    def assign_output(self, bytes=0):
         self.output_index += 1
         self.output_list.append(bytes)
         return self.output_index
 
-    def is_empty(self):
-        return self.size > 0
-
-    def define_return(self, ret):
+    def register_output(self, ret):
         self.ret = ret
 
-    def print_binary(self):
-        for ops in self.list:
-            print(" > ", ops.to_bytes(4, 'big'))
+    def get_output(self):
+        return 
+
+    def clear(self):
+        pass
+
+__session = Session()
 
 def allow_emulate(output_bytes=0):
     """Decorator allow formalize definition of atom operations.
@@ -57,13 +60,14 @@ def allow_emulate(output_bytes=0):
         @wraps(func)
         def wrapper(*args, **kwargs):
             code = func(*args, **kwargs)
-            global session
 
+            global __session
             if is_emulate():
-                session.add(code)
-                return session.assign_output_index(output_bytes)
+                __session.register_code(code)
+                return __session.assign_output(output_bytes)
             else:
-                execute_once(code)
+                pass
+                # TODO: execute_once(code)
                 # TODO: Add return value
 
         return wrapper
@@ -94,8 +98,9 @@ from .statistics import get_runtime
 from . import device
 
 class connect(object):
-    def __init__(self, path):
+    def __init__(self, path, debug=False):
         self.path = path
+        device.debug(debug)
 
     def __enter__(self):
         device.open()
@@ -103,36 +108,31 @@ class connect(object):
 
     def __exit__(self, exc_type, exc_value, tb):
         device.close()
+        device.debug(False)
 
         if exc_type is not None:
             return False
         else:
             return True
-    
-def new_session():
-    global session
-    if session is not None:
-        if not session.is_empty():
-            __module_logger.warn('Previous session was discarded!')
-        else:
-            return
-    session = Session()
-
-def execute_once(code):
-    pass
 
 import pickle
 
-def execute(run, every=0, total=0, out='temp'):
-    global session
-    new_session()
+def clear():
+    global __session
+    __session.clear()
+
+def register(run):
+    global __session
 
     with start_emulate():
         ret = run()
-    session.define_return(ret)
+    __session.register_output(ret)
+
+def execute(every=0, total=0, out='temp'):
+    global __session
 
     run_time = 0
-    for ops in session.list:
+    for ops in __session.list:
         run_time += get_runtime(ops)
 
     if run_time > every:
@@ -143,9 +143,9 @@ def execute(run, every=0, total=0, out='temp'):
 
     # Print output info
     print(f"""
-====== Output Information =======
-Total lines:        {session.size}
-Total output:       {session.output_index}
+======== Execution Summary ========
+Total lines:        {__session.size}
+Total output:       {__session.output_index}
 Execution time:     {u.to_pretty(run_time)}
 
 Execution every:    {u.to_pretty(every)}
@@ -153,19 +153,17 @@ Total time:         {u.to_pretty(total)}
 
 Output file:        ./{out}.dat
                     ./{out}.pkl
-=================================
+===================================
     """)
-    with open(out+'.pkl', 'wb') as file:
-        pickle.dump(ret, file)
 
     device.trigger_in(0x40, 0) # Reset logic block
     device.trigger_in(0x40, 1) # Reset memory block
 
     device.pipe_in(0x81, device.to_byte_single(device.to_tick(every), 6))# Load clock counter
-    device.pipe_in(0x80, device.to_byte(session.list)) # Load program
+    device.pipe_in(0x80, device.to_byte(__session.list)) # Load program
 
-    data_result = bytearray(session.output_list.count(2)*2) # Pipe out container
-    time_result = bytearray(session.output_list.count(6)*6) # Pipe out container
+    data_result = bytearray(__session.output_list.count(2)*2) # Pipe out container
+    time_result = bytearray(__session.output_list.count(6)*6) # Pipe out container
 
     device.wire_in(0x00, 1) # Enable execution
     start_time = time.time()
@@ -178,3 +176,14 @@ Output file:        ./{out}.dat
                 file.write(time_result)
                 file.write(data_result)
         device.wire_in(0x00, 0) # Stop execution
+
+"""For debug purpose only
+"""
+def output_mem(path='./'):
+    global __session
+    with open(path+'code.mem', 'w') as file:
+        code = device.to_byte(__session.list)
+        length = len(code)
+        for i in range(int(length/4)):
+            file.write('{:02x} {:02x} {:02x} {:02x}\n'\
+                .format(code[4*i], code[4*i+1], code[4*i+2], code[4*i+3]))

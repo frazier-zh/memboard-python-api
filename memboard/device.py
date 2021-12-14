@@ -6,19 +6,46 @@ import numpy as np
 
 __device = ok.okCFrontPanel()
 __module_logger = logging.getLogger(__name__)
+__debug = False
+
+def debug(enable):
+    global __debug
+    __debug = enable
+
+def error(msg, throw=True):
+    global __debug
+
+    if __debug:
+        try:
+            if (error.last == msg):
+                error.count += 1
+            else:
+                if error.count>0:
+                    __module_logger.error(f'{error.last} <folded {error.count} repeating errors>.')
+                __module_logger.error(msg)
+                error.last = msg
+                error.count = 0
+        except AttributeError:
+            __module_logger.error(msg)
+            error.last = msg
+            error.count = 0
+            
+    else:
+        if throw:
+            raise RuntimeError(msg)
 
 def open():
     if __device.GetDeviceCount() == 0:
-        raise RuntimeError('FPGA device not found.')
+        error('FPGA device not found.')
     if __device.OpenBySerial(''):
-        raise RuntimeError('FPGA connection failed.')
+        error('FPGA connection failed.')
 
 def load(path):
     if os.path.isfile(path):
         if __device.ConfigureFPGA(path):
-            raise RuntimeError('FPGA configuration failed.')
+            error('FPGA configuration failed.')
     else:
-        raise RuntimeError('Invalid configuration file path.')
+        error('Invalid configuration file path.')
 
 def close():
     __device.Close()
@@ -45,15 +72,15 @@ def to_time(tick):
 
 def pipe_in(addr, data):
     if __device.WriteToPipeIn(addr, data):
-        RuntimeError('WriteToPipeIn() failed.')
+        error('WriteToPipeIn() failed.')
 
 def pipe_out(addr, data):
     if __device.ReadFromPipeOut(addr, data):
-        RuntimeError('ReadFromPipeOut() failed.')
+        error('ReadFromPipeOut() failed.')
 
 def trigger_in(addr, index):
     if __device.ActivateTriggerIn(addr, index):
-        RuntimeError('ActivateTriggerIn() failed.')
+        error('ActivateTriggerIn() failed.')
 
 def wait_trigger_out(addr, index, time_out=1):
     triggered = False
@@ -61,10 +88,10 @@ def wait_trigger_out(addr, index, time_out=1):
 
     while not triggered:
         if (time.time()-start_time > time_out):
-            __module_logger.warn('Time out on waiting TriggerOut.')
+            error('Time out on waiting TriggerOut.', throw=False)
             return False
         if __device.UpdateTriggerOuts():
-            RuntimeError('UpdateTriggerOuts() failed.')
+            error('UpdateTriggerOuts() failed.')
         triggered = __device.IsTriggered(addr, index)
 
     return True
@@ -72,9 +99,9 @@ def wait_trigger_out(addr, index, time_out=1):
 def wire_in(addr, value):
     __device.SetWireInValue(addr, value)
     if __device.UpdateWireIns():
-        RuntimeError('UpdateWireIns() failed.')
+        error('UpdateWireIns() failed.')
 
 def wire_out(addr):
     if __device.UpdateWireOuts(addr):
-        RuntimeError('UpdateWireOuts() failed.')
+        error('UpdateWireOuts() failed.')
     return __device.GetWireOutValue(addr)

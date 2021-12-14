@@ -6,21 +6,21 @@ import numpy as np
 
 def run():
     top_pin_list = [29, 30, 31, 32, 33]
-    bottom_pin2 = 83
-    bottom_pin1 = 2
-    results = np.zeros((3, 5))
+    bottom_pin = 83
+    results = np.zeros((2, 5))
 
     apply(pin=1, v=0.5 *u.V)
     apply(pin=84, v=0 *u.V)
 
     for i in range(5):
         results[0, i] = time()
-        results[1, i] = measure(pin=bottom_pin1, drive_pin=top_pin_list[i], v=0.1 *u.V)
-        results[2, i] = measure(pin=bottom_pin2, drive_pin=top_pin_list[i], v=0.1 *u.V)
+        results[2, i] = measure(pin=bottom_pin, drive_pin=top_pin_list[i], v=0.1 *u.V)
         wait(10 *u.us)
 
     return results
 
 
-with mb.connect('top.bit'):
-    mb.execute(run, every=200 *u.us, total=5 *u.s, out='scan')
+with mb.connect('../verilog/src/top.bit', debug=True):
+    mb.register(run)
+    mb.output_mem()
+    mb.execute(every=200 *u.us, total=5 *u.s, out='scan')
