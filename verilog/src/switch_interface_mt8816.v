@@ -24,30 +24,21 @@ module switch_interface_group(
 	output CS_SW1,
 	output RESET_SW2,
 	output CS_SW2,
-	output RESET_SW3,
-	output CS_SW3,
-	output RESET_SW4,
-	output CS_SW4,
-	output RESET_SW5,
-	output CS_SW5,
-	output RESET_SW6,
-	output CS_SW6,
 	
 	input clk,
 	input cs,
 	output reg rdy,
 	input [3:0] op,
-	input [7:0] addr,
 	input [15:0] data_in,
 	
-	output reg AX,
-	output reg AY,
+	output reg [3:0] AX,
+	output reg [2:0] AY,
 	output reg STROBE,
 	output reg DATA
 );
 
 reg en = 0, rst = 0;
-reg [3:0] sw_no;
+reg sw_no;
 
 // Arguments
 always @(posedge clk)
@@ -55,9 +46,9 @@ always @(posedge clk)
 		rst <= op[0];
 		en <= op[1];
 		
-		sw_no <= addr[3:0];
-		AY <= data_in[6:4];
-		DATA <= data_in[8];
+		sw_no <= data_in[4];
+		AY <= data_in[10:8];
+		DATA <= data_in[12];
 		
 		case (data_in[3:0])
 			6,7,8,9,10,11: AX <= data_in[3:0]+2;
@@ -71,11 +62,11 @@ always @(posedge clk)
 		en <= 0;
 	end
 
-reg [5:0] sw_rst = 0;
-assign {RESET_SW6, RESET_SW5, RESET_SW4, RESET_SW3, RESET_SW2, RESET_SW1} = sw_rst;
+reg [1:0] sw_rst = 0;
+assign {RESET_SW2, RESET_SW1} = sw_rst;
 
-reg [5:0] sw_cs = 0;
-assign {CS_SW6, CS_SW5, CS_SW4, CS_SW3, CS_SW2, CS_SW1} = sw_cs;
+reg [1:0] sw_cs = 0;
+assign {CS_SW2, CS_SW1} = sw_cs;
 
 // FSM basic
 localparam
@@ -148,15 +139,15 @@ always @(posedge clk) begin
 				
 			s_start:
 				case (time_count)
-					1: begin
+					0: begin
 							sw_cs <= 1<<sw_no;
 							AX <= AX;
 							AY <= AY;
 							DATA <= DATA;
 						end
-					3: STROBE <= 1;
-					6: STROBE <= 0;
-					8: begin
+					2: STROBE <= 1;
+					5: STROBE <= 0;
+					7: begin
 							state <= s_wait;
 							time_count <= 0;
 							sw_cs <= 0;

@@ -112,15 +112,15 @@ always @(posedge clk) begin
 				
 			s_set:
 				case (time_count)
-					1: begin
+					0: begin
 							RW <= 0;
 							LDAC <= 0;
 							AD <= channel;
 							DB <= data_buffer;
 						end
-					2: CS <= 0;
-					4: CS <= 1;
-					5: begin
+					1: CS <= 0;
+					3: CS <= 1;
+					4: begin
 							state <= s_idle;
 							RW <= 1;
 							LDAC <= 1;

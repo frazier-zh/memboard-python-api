@@ -35,9 +35,9 @@ assign rdy = counter_end;
 always @(posedge clk)
 	if (cs == 1) begin
 		if (op[0] == 0) begin
-			counter_data <= {24'b0, addr, data_in};
+			counter_data <= {24'b0, data_in, addr};
 		end else begin
-			counter_data <= {addr, data_in, 24'b0};
+			counter_data <= {data_in, addr, 24'b0};
 		end
 		counter_load <= 1;
 	end else begin

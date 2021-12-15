@@ -69,7 +69,7 @@ END COMPONENT;
       c_ce_overrides_sync => 0,
       c_count_by => "1",
       c_count_mode => 1,
-      c_count_to => "1",
+      c_count_to => "10",
       c_fb_latency => 3,
       c_has_ce => 0,
       c_has_load => 1,
@@ -83,7 +83,7 @@ END COMPONENT;
       c_restrict_count => 1,
       c_sclr_overrides_sset => 1,
       c_sinit_val => "0",
-      c_thresh0_value => "1",
+      c_thresh0_value => "10",
       c_verbosity => 0,
       c_width => 48,
       c_xdevicefamily => "spartan6"

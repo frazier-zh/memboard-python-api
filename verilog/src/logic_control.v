@@ -25,26 +25,19 @@ module logic_control(
 	 output reg rdy,
 	 
 	 // Memory block
-	 output reg mblock_en,
+	 output reg mblock_read,
 	 output reg mblock_clr,
 	 input mblock_valid,
     input [3:0] dev_no,
-	 input [15:0] data_bus,
+	 input dev_op_rst,
+	 output reg [6:0] dev_cs,
+	 input [6:0] dev_rdy,
 	 
 	 // Result output
 	 output reg data_out_en,
     output reg [15:0] data_out,
 	 
 	 // Device
-	 output reg switch_cs,
-	 output reg adc_cs,
-	 output reg dac_cs,
-	 output reg timer_cs,
-	 input switch_rdy,
-	 input adc_rdy,
-	 input dac_rdy,
-	 input timer_rdy,
-	 
 	 input [13:0] adc_out,
 	 input [47:0] time_out,
 	 
@@ -54,17 +47,11 @@ module logic_control(
 	 output reg clock_en
     );
 
+reg [3:0] dev_no_s;
+reg dev_op_rst_s;
+
 reg [7:0] time_count;
 reg time_enable;
-
-always @(posedge clk or posedge rst)
-	if (rst) begin
-		time_count <= 0;
-	end else if (time_enable) begin
-		time_count <= time_count + 1;
-	end else begin
-		time_count <= 0;
-	end
 	
 localparam
 	s_idle = 0,
@@ -79,11 +66,20 @@ reg [3:0] state;
 always @(posedge clk) begin
 	if (rst) begin
 		state <= s_idle;
+		mblock_read <= 0;
 		mblock_clr <= 1;
+		data_out_en <= 0;
+		dev_cs <= 0;
 		cd_en <= 0;
 		clock_en <= 0;
 		rdy <= 0;
 	end else begin
+		if (time_enable) begin
+			time_count <= time_count + 1;
+		end else begin
+			time_count <= 0;
+		end
+	
 		case (state)
 			s_idle:
 				if (en == 1) begin
@@ -99,8 +95,13 @@ always @(posedge clk) begin
 			s_read:
 				if (mblock_valid == 1) begin
 					state <= s_call;
-					mblock_en <= 1;
+					mblock_read <= 1;
 					time_enable <= 1;
+					dev_no_s <= dev_no;
+					dev_op_rst_s <= dev_op_rst;
+					case (dev_no)
+						1,2,3,4,5,6: dev_cs <= 1<<dev_no;
+					endcase
 				end else begin
 					state <= s_standby;
 					rdy <= 1;
@@ -108,28 +109,26 @@ always @(posedge clk) begin
 			
 			s_call:
 				case (time_count)
-					1: mblock_en <= 0;
-					2: case (dev_no)
-							0: begin
-									state <= s_read;
-									time_enable <= 0;
-								end
-							1: adc_cs <= 1;
-							2: dac_cs <= 1;
-							3: switch_cs <= 1;
-							4: timer_cs <= 1;
-							5: state <= s_out_time;
-						endcase
-					3: {adc_cs, dac_cs, switch_cs, timer_cs} <= 5'b0;
-					4: begin
+					0: begin
+							dev_cs <= 0;
+							mblock_read <= 0;
+							if (dev_no_s == 0) begin
+								state <= s_read;
+								time_enable <= 0;
+							end else if (dev_no_s == 7) begin
+								state <= s_out_time;
+								time_count <= 0;
+							end
+						end
+					1: begin
 							state <= s_wait;
 							time_enable <= 0;
 						end
 				endcase
 				
 			s_wait:
-				if ({adc_rdy, dac_rdy, switch_rdy, timer_rdy} == 5'b1111) begin
-					if (dev_no == 1) begin
+				if (dev_rdy[dev_no_s] == 1) begin
+					if ((dev_no_s == 1) && (dev_op_rst_s == 0)) begin
 						state <= s_out_adc;
 						time_enable <= 1;
 					end else begin
@@ -141,11 +140,11 @@ always @(posedge clk) begin
 				
 			s_out_adc:
 				case (time_count)
-					1: begin
+					0: begin
 							data_out <= {2'b0, adc_out};
 							data_out_en <= 1;
 						end
-					2: begin
+					1: begin
 							state <= s_read;
 							data_out_en <= 0;
 							time_enable <= 0;
@@ -154,13 +153,13 @@ always @(posedge clk) begin
 				
 			s_out_time:
 				case (time_count)
-					1: begin
+					0: begin
 							data_out <= time_out[15:0];
 							data_out_en <= 1;
 						end
-					2: data_out <= time_out[31:16];
-					3: data_out <= time_out[47:32];
-					4: begin
+					1: data_out <= time_out[31:16];
+					2: data_out <= time_out[47:32];
+					3: begin
 							state <= s_read;
 							data_out_en <= 0;
 							time_enable <= 0;

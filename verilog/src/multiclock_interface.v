@@ -22,7 +22,7 @@ module multiclock_interface(
     input clk,
 	 
 	 // Cross clock domain input
-	 input ti_clk,
+	 input ti_clk,	
 	 input data_write,
 	 input [15:0] data_in,
 	 input cd_en,
@@ -33,10 +33,16 @@ module multiclock_interface(
 	 output [47:0] data_out
     );
 	
-reg [47:0] counter_data;
 reg cd_load;
+reg [47:0] counter_data;
 wire clr;
 assign clr = ~en;
+
+wire cd_en_oneshot;
+reg cd_en_delay;
+always @(posedge clk)
+	cd_en_delay <= cd_en;
+assign cd_en_oneshot = cd_en & ~cd_en_delay;
 
 always @(posedge ti_clk)
 	if (data_write == 1) begin
@@ -44,8 +50,8 @@ always @(posedge ti_clk)
 	end
 
 always @(posedge clk)
-	if (cd_en == 1)
-		cd_load <= cd_rdy;
+	if ((cd_en_oneshot == 1) || (cd_rdy == 1))
+		cd_load <= 1;
 	else
 		cd_load <= 0;
 

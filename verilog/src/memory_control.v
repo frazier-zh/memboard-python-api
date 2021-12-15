@@ -49,7 +49,7 @@ BLK_MEM_32b_1k blk_mem(
 assign data_read = ~data_in_empty;
 
 always @*
-	if (rd_addr == wr_addr)
+	if (rd_addr == wr_addr+1)
 		valid = 0;
 	else
 		valid = 1;
@@ -57,11 +57,11 @@ always @*
 always @(posedge clk) begin
 	if (rst == 1) begin
 		wr_addr <= 0;
-		rd_addr <= 0;
+		rd_addr <= 1;
 		wr_en <= 0;
 	end else begin
 		if (zero == 1) begin
-			rd_addr <= 0;
+			rd_addr <= 1;
 		end
 		
 		if (data_read == 1) begin

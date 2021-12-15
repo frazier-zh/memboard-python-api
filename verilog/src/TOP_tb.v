@@ -87,9 +87,11 @@ module top_tb;
 	                                  //           host interface checks for ready (0-255)
 	parameter PostReadyDelay = 5;     // REQUIRED: # of clocks after ready is asserted and
 	                                  //           check that the block transfer begins (0-255)
-	parameter pipeInSize = 88;        // REQUIRED: byte (must be even) length of default
+	parameter lines = 49;
+	parameter pipeInSize = lines*4;   // REQUIRED: byte (must be even) length of default
 	                                  //           PipeIn; Integer 0-2^32
-	parameter pipeOutSize = 20;       // REQUIRED: byte (must be even) length of default
+	parameter outputs = 20;
+	parameter pipeOutSize = outputs*2;// REQUIRED: byte (must be even) length of default
 	                                  //           PipeOut; Integer 0-2^32
 	parameter pipeIn2Size = 6;
 
@@ -125,9 +127,30 @@ module top_tb;
 	//------------------------------------------------------------------------
 
 	integer f;
+	
+	// Clock
+	initial begin
+		CLK = 1'b0;
+		forever #5 CLK = ~CLK;
+	end
 
+	// ADC Behaviour
+	always @(negedge CNVST_ADC) begin
+		#40 BUSY_ADC = 1;
+		#720 BUSY_ADC = 0;
+	end
+	
+	always @(negedge SCLK_ADC or negedge BUSY_ADC) begin
+		#20
+		DOUTA_ADC <= $random;
+		DOUTB_ADC <= $random;
+	end
+
+	// Main
 	initial begin
 		FrontPanelReset;
+		
+		#1000
 
 		ActivateTriggerIn(8'h40, 0);
 		ActivateTriggerIn(8'h40, 1);
@@ -142,31 +165,13 @@ module top_tb;
 		UpdateWireIns;
 
 		// Start execution
-		#20000
+		#30000
 		ReadFromPipeOut(8'hA0, pipeOutSize);
 
 		f = $fopen("../../scan.out", "w");
 		for (k=0; k<pipeOutSize; k=k+1)
 			$fwrite(f, "%02x\n", pipeOut[k]);
 		$fclose(f);
-	end
-	
-	// Clock
-	always begin
-		CLK = 1;
-		#5 CLK = 0;
-	end
-	
-	// ADC Behaviour
-	always @(negedge CNVST_ADC) begin
-		#40 BUSY_ADC = 1;
-		#700 BUSY_ADC = 0;
-	end
-	
-	always @(negedge SCLK_ADC) begin
-		#20
-		DOUTA_ADC <= $random;
-		DOUTB_ADC <= $random;
 	end
 
 	`include "./oksim/okHostCalls.v"   // Do not remove!  The tasks, functions, and data stored

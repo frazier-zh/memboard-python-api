@@ -144,7 +144,7 @@ FIFO_16b_16b_1k fifo_data_out(
 	.empty()
 );
 
-wire mblock_en, mblock_clr, mblock_valid;
+wire mblock_read, mblock_clr, mblock_valid;
 
 memory_control mem_ctrl(
 	.clk(CLK),
@@ -154,7 +154,7 @@ memory_control mem_ctrl(
 	.data_out(main_bus),
 	.rst(mem_rst),
 	.zero(mblock_clr),
-	.rd_en(mblock_en),
+	.rd_en(mblock_read),
 	.valid(mblock_valid)
 );
 
@@ -193,8 +193,9 @@ wire [7:0] addr_bus;
 wire [15:0] data_bus;
 assign {data_bus, addr_bus, op_bus, dev_no} = main_bus;
 
-wire switch_cs, adc_cs, dac_cs, timer_cs;
-wire switch_rdy, adc_rdy, dac_rdy, timer_rdy;
+wire [6:0] dev_cs;
+wire [6:0] dev_rdy;
+assign dev_rdy[0] = 1;
 wire [13:0] adc_out;
 
 logic_control logic_ctrl(
@@ -202,15 +203,15 @@ logic_control logic_ctrl(
 	.en(logic_en),
 	.rst(logic_rst),
 	.rdy(logic_rdy),
-	.mblock_en(mblock_en),
+	.mblock_read(mblock_read),
 	.mblock_clr(mblock_clr),
 	.mblock_valid(mblock_valid),
 	.dev_no(dev_no),
-	.data_bus(data_bus),
+	.dev_op_rst(op_bus[0]),
+	.dev_cs(dev_cs),
+	.dev_rdy(dev_rdy),
 	.data_out_en(data_write),
 	.data_out(data_out),
-	.switch_cs(switch_cs), .adc_cs(adc_cs), .dac_cs(dac_cs), .timer_cs(timer_cs),
-	.switch_rdy(switch_rdy), .adc_rdy(adc_rdy), .dac_rdy(dac_rdy), .timer_rdy(timer_rdy),
 	.adc_out(adc_out),
 	.time_out(time_out),
 	.cd_en(cd_en),
@@ -220,35 +221,41 @@ logic_control logic_ctrl(
 
 // Device definitions
 
-wire AX_SW, AY_SW, STROBE_SW, DATA_SW;
-assign AX_SW1 = AX_SW, AX_SW2 = AX_SW, AX_SW3 = AX_SW, AX_SW4 = AX_SW, AX_SW5 = AX_SW, AX_SW6 = AX_SW;
-assign AY_SW1 = AY_SW, AY_SW2 = AY_SW, AY_SW3 = AY_SW, AY_SW4 = AY_SW, AY_SW5 = AY_SW, AY_SW6 = AY_SW;
-assign STROBE_SW1 = STROBE_SW, STROBE_SW2 = STROBE_SW, STROBE_SW3 = STROBE_SW, STROBE_SW4 = STROBE_SW, STROBE_SW5 = STROBE_SW, STROBE_SW6 = STROBE_SW;
-assign DATA_SW1 = DATA_SW, DATA_SW2 = DATA_SW, DATA_SW3 = DATA_SW, DATA_SW4 = DATA_SW, DATA_SW5 = DATA_SW, DATA_SW6 = DATA_SW;
-
-switch_interface_group switch(
-	.RESET_SW1(RESET_SW1), .CS_SW1(CS_SW1),
-	.RESET_SW2(RESET_SW2), .CS_SW2(CS_SW2),
-	.RESET_SW3(RESET_SW3), .CS_SW3(CS_SW3),
-	.RESET_SW4(RESET_SW4), .CS_SW4(CS_SW4),
-	.RESET_SW5(RESET_SW5), .CS_SW5(CS_SW5),
-	.RESET_SW6(RESET_SW6), .CS_SW6(CS_SW6),
-	.clk(CLK), .cs(switch_cs), .rdy(switch_rdy), .op(op_bus), .addr(addr_bus), .data_in(data_bus),
-	.AX(AX_SW), .AY(AY_SW), .STROBE(STROBE_SW), .DATA(DATA_SW)
-);
-
 adc_interface_ad7367 adc(
 	.BUSY(BUSY_ADC), .SCLK(SCLK_ADC), .CNVST(CNVST_ADC), .CS(CS_ADC), .DOUTA(DOUTA_ADC), .DOUTB(DOUTB_ADC),
-	.clk(CLK), .cs(adc_cs), .rdy(adc_rdy), .op(op_bus), .addr(addr_bus), .data_out(adc_out)
+	.clk(CLK), .cs(dev_cs[1]), .rdy(dev_rdy[1]), .op(op_bus), .addr(addr_bus), .data_out(adc_out)
 );
 
 dac_interface_ad5725 dac(
 	.AD(AD_DAC), .DB(DB_DAC), .RW(RW_DAC), .LDAC(LDAC_DAC), .CS(CS_DAC), .CLR(CLR_DAC),
-	.clk(CLK), .cs(dac_cs), .rdy(dac_rdy), .op(op_bus), .addr(addr_bus), .data_in(data_bus)
+	.clk(CLK), .cs(dev_cs[2]), .rdy(dev_rdy[2]), .op(op_bus), .addr(addr_bus), .data_in(data_bus)
 );
 
 timer_interface timer(
-	.clk(CLK), .cs(timer_cs), .rdy(timer_rdy), .op(op_bus), .addr(addr_bus), .data_in(data_bus)
+	.clk(CLK), .cs(dev_cs[3]), .rdy(dev_rdy[3]), .op(op_bus), .addr(addr_bus), .data_in(data_bus)
+);
+
+assign AX_SW2 = AX_SW1, AX_SW4 = AX_SW3, AX_SW6 = AX_SW5;
+assign AY_SW2 = AY_SW1, AY_SW4 = AY_SW3, AY_SW6 = AY_SW5;
+assign STROBE_SW2 = STROBE_SW1, STROBE_SW4 = STROBE_SW3, STROBE_SW6 = STROBE_SW5;
+assign DATA_SW2 = DATA_SW1, DATA_SW4 = DATA_SW3, DATA_SW6 = DATA_SW5;
+
+switch_interface_group switch1(
+	.RESET_SW1(RESET_SW1), .CS_SW1(CS_SW1), .RESET_SW2(RESET_SW2), .CS_SW2(CS_SW2),
+	.clk(CLK), .cs(dev_cs[4]), .rdy(dev_rdy[4]), .op(op_bus), .data_in(data_bus),
+	.AX(AX_SW1), .AY(AY_SW1), .STROBE(STROBE_SW1), .DATA(DATA_SW1)
+);
+
+switch_interface_group switch2(
+	.RESET_SW1(RESET_SW3), .CS_SW1(CS_SW3), .RESET_SW2(RESET_SW4), .CS_SW2(CS_SW4),
+	.clk(CLK), .cs(dev_cs[5]), .rdy(dev_rdy[5]), .op(op_bus), .data_in(data_bus),
+	.AX(AX_SW3), .AY(AY_SW3), .STROBE(STROBE_SW3), .DATA(DATA_SW3)
+);
+
+switch_interface_group switch3(
+	.RESET_SW1(RESET_SW5), .CS_SW1(CS_SW5), .RESET_SW2(RESET_SW6), .CS_SW2(CS_SW6),
+	.clk(CLK), .cs(dev_cs[6]), .rdy(dev_rdy[6]), .op(op_bus), .data_in(data_bus),
+	.AX(AX_SW5), .AY(AY_SW5), .STROBE(STROBE_SW5), .DATA(DATA_SW5)
 );
 
 endmodule
