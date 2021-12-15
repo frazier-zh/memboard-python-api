@@ -22,7 +22,7 @@ class Session(object):
     def __iadd__(self, other):
         return self.add(other)
 
-    def register_code(self, other):
+    def add(self, other):
         if isinstance(other, np.ndarray):
             if self.list is not None:
                     self.list = np.concatenate((self.list, other))
@@ -42,16 +42,12 @@ class Session(object):
         self.output_size += width
         return self.output_index
 
-    def register_output(self, ret):
-        self.ret = ret
-
-    def get_output(self):
-        return 
-
-    def clear(self):
+    def clear():
         pass
 
+# Key variables
 __session = Session()
+output = dict()
 
 def allow_emulate(width=0):
     """Decorator allow formalize definition of atom operations.
@@ -67,7 +63,7 @@ def allow_emulate(width=0):
 
             global __session
             if is_emulate():
-                __session.register_code(code)
+                __session.add(code)
                 return __session.assign_output(width)
             else:
                 pass
@@ -130,15 +126,21 @@ def clear():
     global __session
     __session.clear()
 
-def register(run):
+def add(run):
     global __session
 
     with start_emulate():
         ret = run()
-    __session.register_output(ret)
 
-def execute(every=0, total=0, out='temp'):
+def execute(func=None, every=0, total=0, filename='temp'):
     global __session
+
+    if func is None:
+        if __session.size==0:
+            __module_logger.warn('No task found.')
+            return
+    else:
+        add(func)
 
     run_time = 0
     for ops in __session.list:
@@ -159,9 +161,8 @@ Output size (byte):   {__session.output_size*2}
 Execution time:       {u.to_pretty(run_time)}
 Execution every:      {u.to_pretty(every)}
 Total time:           {u.to_pretty(total)}
-Output file:          ./{out}.dat
-Format file:          ./{out}.pkl
-Memory file (debug):  ./{out}.mem*
+Output file:          ./{filename}.dat
+Memory file (debug):  ./{filename}.mem*
 ===================================
     """)
     
@@ -169,14 +170,14 @@ Memory file (debug):  ./{out}.mem*
     if (__debug):
         """Generate verilog memory file, used in host simulation
         """
-        with open(out+'.mem1', 'w') as file:
+        with open(filename+'.mem1', 'w') as file:
             mem = device.to_byte(__session.list)
             length = len(mem)
             for i in range(int(length/4)):
                 file.write('{:02x} {:02x} {:02x} {:02x}\n'\
                     .format(mem[4*i], mem[4*i+1], mem[4*i+2], mem[4*i+3]))
 
-        with open(out+'.mem2', 'w') as file:
+        with open(filename+'.mem2', 'w') as file:
             mem = device.to_byte_single(device.to_tick(every), 6)
             for v in mem:
                 file.write('{:02x} '.format(v))
@@ -193,9 +194,9 @@ Memory file (debug):  ./{out}.mem*
     time_result = bytearray(__session.output_list.count(6)*6) # Pipe out container
 
     device.wire_in(0x00, 1) # Enable execution
-    start_time = time.time()
     stop_time = total/u.s
-    with open(out+'.out', 'wb') as file:
+    with open(filename+'.dat', 'wb') as file:
+        start_time = time.time()
         while time.time()-start_time<stop_time:
             if device.wait_trigger_out(0x60, 0):
                 device.pipe_out(0xA1, time_result)
@@ -203,3 +204,24 @@ Memory file (debug):  ./{out}.mem*
                 file.write(time_result)
                 file.write(data_result)
         device.wire_in(0x00, 0) # Stop execution
+
+    convert(filename)
+
+import csv
+def convert(filename='temp'):
+    global __session
+    read_size = __session.output_size * 2
+
+    with open(filename+'.csv', 'w', newline='') as csvfile:
+        fieldnames = [str(key) for key in output.keys()]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        with open(filename+'.dat', 'rb') as file:
+            data = file.read(read_size)
+            while data:
+                temp_dict = output.copy()
+                for i in range(__session.output_index):
+                    pass
+
+                data = file.read(read_size)
