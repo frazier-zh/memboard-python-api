@@ -220,8 +220,14 @@ def convert(filename='temp'):
         with open(filename+'.dat', 'rb') as file:
             data = file.read(read_size)
             while data:
-                temp_dict = output.copy()
+                data_processed = np.zeros(__session.output_index, dtype=np.uint64)
                 for i in range(__session.output_index):
-                    pass
+                    value = 0
+                    for j in range(__session.output_list[i]):
+                        value <<= 8
+                        value += data[0]
+                        del data[0]
+
+                temp_dict = output.copy()
 
                 data = file.read(read_size)
