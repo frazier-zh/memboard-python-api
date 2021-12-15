@@ -40,79 +40,25 @@ Notice:
     created in the future.
 """
 @allow_emulate(width=1)
-def adc(op, channel=0):
+def adc(channel=0):
     """ADC control
     """
-    if op == 'reset':   
-        op_bytes = 1
-    elif op == 'enable':
-        op_bytes = 2
-    else:
-        raise ValueError("Invalid ADC operation")
-
     if channel not in [0, 1]:
-        raise ValueError("Invalid ADC channel")
-
-    return to_code(
-        [[4, 1], [4, op_bytes], [8, channel]]
-    )
-
-def to_switch_no(pin):
-    if pin not in range(1, 84+1):
-        raise ValueError('Invalid pin number (1-86).')
-
-    group = int((pin-1)/28)
-    pin_in_group = (pin-1)%28
-    x = pin_in_group if pin_in_group>15 else pin_in_group-16
-    channel = group*2 + (1 if pin_in_group>15 else 0)
-
-    return group, channel, x
+        raise ValueError("Invalid ADC channel.")
+    return to_code([[4, 1], [4, 2], [8, channel]])
 
 @allow_emulate()
-def sw(op, pin=0, y=0, on=False):
-    """Switch control
-    """
-    if op == 'reset':   
-        op_bytes = 1
-    elif op == 'enable':
-        op_bytes = 2
-    else:
-        raise ValueError("Invalid Switch operation")
-
-    _, channel, x = to_switch_no(pin)
-
-    if y not in range(3):
-        raise ValueError("Invalid Y address")
-
-    if not isinstance(on, bool):
-        raise ValueError("Invalid on/off value")
-
-    return to_code(
-        [[4, 3], [4, op_bytes], [8, channel], [4, x], [4, y], [1, on]]
-    )
-
-@allow_emulate()
-def dac(op, channel=0, value=0x800):
+def dac(channel=0, value=0x800):
     """DAC control
     """
-    if op == 'reset':   
-        op_bytes = 1
-    elif op == 'enable':
-        op_bytes = 2
-    else:
-        raise ValueError("Invalid DAC operation")
-
     if channel not in range(4):
-        raise ValueError("Invalid DAC channel")
-    if  op=='enable' and channel==0 and not value==0x800:
-        __module_logger.warn("DAC channel 0 should always be set to 0x800")
-
+        raise ValueError("Invalid DAC channel.")
+    if channel==0 and not value==0x800:
+        __module_logger.warn("DAC channel 0 should always be set to 0x800.")
     if value not in range(0x1000):
-        raise ValueError("Invalid DAC value, max 0xFFF")
+        raise ValueError("Invalid DAC value, max 0xFFF.")
 
-    return to_code(
-        [[4, 2], [4, op_bytes], [8, channel], [16, value]]
-    )
+    return to_code([[4, 2], [4, 2], [8, channel], [16, value]])
 
 @allow_emulate()
 def wait(time):
@@ -123,21 +69,52 @@ def wait(time):
         raise ValueError("Invalid waiting time, max= 30 days.")
     elif time>>24:
         return to_code(
-            [[4, 4], [4, 1], [24, time>>24]],
-            [[4, 4], [4, 0], [24, time % 0x1000000]]
+            [[4, 3], [4, 1], [24, time>>24]],
+            [[4, 3], [4, 0], [24, time % 0x1000000]]
         )
     else:
-        return to_code(
-            [[4, 4], [4, 0], [24, time]]
-        )
+        return to_code([[4, 3], [4, 0], [24, time]])
+
+def to_switch_group(pin):
+    if pin not in range(1, 84+1):
+        raise ValueError('Invalid pin number (1-86).')
+    group = int((pin-1)/28)
+    pin_in_group = (pin-1)%28
+    return group, pin_in_group
+
+@allow_emulate()
+def switch(pin=0, y=0, on=False):
+    """Switch control
+    """
+    if y not in range(3):
+        raise ValueError("Invalid Y address.")
+    if not isinstance(on, bool):
+        raise ValueError("Invalid on/off value.")
+    group, x = to_switch_group(pin)
+
+    return to_code([[4, 4+group], [4, 2], [8, 0], [8, x], [4, y], [4, on]])
 
 @allow_emulate(width=3)
 def time():
     """Get precise time from FPGA
     """
-    return to_code(
-        [[4, 6]]
-    )
+    return to_code([[4, 7]])
+
+device_list = {
+    'adc' : 1,
+    'dac' : 2,
+    'source': 4,
+    'gate': 5,
+    'drain': 6
+}
+@allow_emulate()
+def reset(device):
+    if device == 'all':
+        return to_code(*[[[4, i], [4, 1]] for i in device_list.values()])
+    elif device not in device_list:
+        raise ValueError("Invalid device for reset operation.")
+    else:
+        return to_code([[4, device_list[device]], [4, 1]])
 
 """Definition of compound operation
     Each compound operation consists of multiple atom operation.
@@ -150,12 +127,14 @@ finishes, and return values are immediately valid.
     @allow_emulate is not allowed to use, since only atom operations are
 allowed to register return value on FPGA.
 """
-def reset():
-    sw(op='reset')
-    adc(op='reset')
-    dac(op='reset')
+def reset_all():
+    reset('adc')
+    reset('dac')
+    reset('source')
+    reset('gate')
+    reset('drain')
 
-#   SW  GND     DAC     ADC
+#   switch  GND     DAC     ADC
 switch_connection = {
     0: [0,      1,      0],
     1: [-1,     2,      -1],
@@ -164,47 +143,47 @@ switch_connection = {
 
 from .statistics import to_int, to_voltage
 def ground(pin):
-    group, _, _ = to_switch_no(pin)
+    group, _ = to_switch_group(pin)
     if [group][0]==-1:
         raise ValueError(f"Pin {pin} cannot connect to ground, use DAC instead.")
     else:
-        sw(op='enable', pin=pin, y=0, on=True)
+        switch(pin=pin, y=0, on=True)
 
 def apply(pin, v=None):
     """Apply voltage on given terminal
-    1. determine DAC channel and SW number
-    3. enable SW for connection setup
+    1. determine DAC channel and switch number
+    3. enable switch for connection setup
     2. enable DAC for voltage setup
 
     Args:
         pin (int): pin number
         voltage (float): voltage value
     """
-    group, _, _ = to_switch_no(pin)
+    group, _ = to_switch_group(pin)
     channel = switch_connection[group][1]
 
-    sw(op='enable', pin=pin, y=1, on=True)
+    switch(pin=pin, y=1, on=True)
     
     # Just connect to DAC if voltage is not given
     if v is not None:
-        dac(op='enable', channel=channel, value=to_int(v))
+        dac(channel=channel, value=to_int(v))
     else:
         __module_logger.warn(f'Pin {pin} is connected to DAC-{channel} by default.')
 
 def measure(pin, drive_pin=None, v=None):
-    group, _, _ = to_switch_no(pin)
+    group, _ = to_switch_group(pin)
     channel = switch_connection[group][2]
 
     # Turn on DAC/ADC connections
-    sw(op='enable', pin=pin, y=2, on=True)
+    switch(pin=pin, y=2, on=True)
     if drive_pin is not None:
         apply(drive_pin, v)
 
-    ret = adc(op='enable', channel=channel)
+    ret = adc(channel=channel)
 
     # Turn off DAC/ADC connections
     if drive_pin is not None:
-        sw(op='enable', pin=drive_pin, y=1, on=False)
-    sw(op='enable', pin=pin, y=2, on=False)
+        switch(pin=drive_pin, y=1, on=False)
+    switch(pin=pin, y=2, on=False)
 
     return ret

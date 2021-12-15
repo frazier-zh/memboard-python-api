@@ -12,7 +12,7 @@ at import of the module.
 """
 class Session(object):
     def __init__(self):
-        self.list = np.zeros(1, dtype=np.uint32)
+        self.list = None
         self.size = 0
         self.output_index = 0
         self.output_list = []
@@ -24,12 +24,12 @@ class Session(object):
 
     def register_code(self, other):
         if isinstance(other, np.ndarray):
-            self.list = np.concatenate((self.list, other))
-            self.size += other.shape[0]
-        
-        if isinstance(other, Session):
-            self.list = np.concatenate((self.list, other.list))
-            self.size += other.size
+            if self.list is not None:
+                    self.list = np.concatenate((self.list, other))
+                    self.size += other.shape[0]
+            else:
+                self.list = other
+                self.size = other.shape[0]
 
     def get_code(self):
         return self.list
@@ -101,10 +101,14 @@ from . import unit as u
 from .statistics import get_runtime
 from . import device
 
+__debug = False
 class connect(object):
     def __init__(self, path, debug=False):
         self.path = path
+
         device.debug(debug)
+        global __debug
+        __debug = True
 
     def __enter__(self):
         device.open()
@@ -112,14 +116,15 @@ class connect(object):
 
     def __exit__(self, exc_type, exc_value, tb):
         device.close()
+
         device.debug(False)
+        global __debug
+        __debug = False
 
         if exc_type is not None:
             return False
         else:
             return True
-
-import pickle
 
 def clear():
     global __session
@@ -140,38 +145,41 @@ def execute(every=0, total=0, out='temp'):
         run_time += get_runtime(ops)
 
     if run_time > every:
-        __module_logger.warn(f'Execution takes longer than the given interval\
-            {u.to_pretty(run_time)} > {u.to_pretty(every)}')
+        __module_logger.warn(f'Execution takes longer than the given interval {u.to_pretty(run_time)} > {u.to_pretty(every)}.')
         every = 1.5 * run_time
-        __module_logger.warn(f'Execution interval is set to {u.to_pretty(every)}')
+        __module_logger.warn(f'Execution interval is set to {u.to_pretty(every)}.')
+    elif 1.1*run_time > every:
+        __module_logger.warn(f'Execution may takes longer than the given interval {u.to_pretty(every)}')
 
     # Print output info
     print(f"""
 ======== Execution Summary ========
-Total commands:     {__session.size}
-Total outputs:      {__session.output_size}
-Execution time:     {u.to_pretty(run_time)}
-Execution every:    {u.to_pretty(every)}
-Total time:         {u.to_pretty(total)}
-Output file:        ./{out}.dat
-Format file:        ./{out}.pkl
-Memory file:        ./{out}.mem*
+Total commands:       {__session.size}
+Output size (byte):   {__session.output_size*2}
+Execution time:       {u.to_pretty(run_time)}
+Execution every:      {u.to_pretty(every)}
+Total time:           {u.to_pretty(total)}
+Output file:          ./{out}.dat
+Format file:          ./{out}.pkl
+Memory file (debug):  ./{out}.mem*
 ===================================
     """)
+    
+    global __debug
+    if (__debug):
+        """Generate verilog memory file, used in host simulation
+        """
+        with open(out+'.mem1', 'w') as file:
+            mem = device.to_byte(__session.list)
+            length = len(mem)
+            for i in range(int(length/4)):
+                file.write('{:02x} {:02x} {:02x} {:02x}\n'\
+                    .format(mem[4*i], mem[4*i+1], mem[4*i+2], mem[4*i+3]))
 
-    # For debug purpose only
-    with open(out+'.mem1', 'w') as file:
-        mem = device.to_byte(__session.list)
-        length = len(mem)
-        for i in range(int(length/4)):
-            file.write('{:02x} {:02x} {:02x} {:02x}\n'\
-                .format(mem[4*i], mem[4*i+1], mem[4*i+2], mem[4*i+3]))
-
-    # For debug purpose only
-    with open(out+'.mem2', 'w') as file:
-        mem = device.to_byte_single(device.to_tick(every), 6)
-        for v in mem:
-            file.write('{:02x} '.format(v))
+        with open(out+'.mem2', 'w') as file:
+            mem = device.to_byte_single(device.to_tick(every), 6)
+            for v in mem:
+                file.write('{:02x} '.format(v))
 
     # Start execution
     device.trigger_in(0x40, 0) # Reset logic block
