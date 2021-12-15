@@ -8,6 +8,7 @@ def run():
     bottom_pin = 84
 
     reset('all')
+    apply(pin=1, v=2 *u.V)
     output['time'] = time()
     output['current'] = measure(pin=bottom_pin, drive_pin=top_pin, v=1 *u.V)
 
