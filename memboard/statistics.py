@@ -9,12 +9,12 @@ _op_runtime = {
     0x22:       60, # DAC enable
     0x03:       10, # Wait, 10ns
     0x13:       0x1000000, # Wait, 0x1000000 * 10ns
-    0x14:       190, # Switch1 reset
-    0x24:       190, # Switch1 enable
-    0x15:       190, # Switch2 reset
-    0x25:       190, # Switch2 enable
-    0x16:       190, # Switch3 reset
-    0x26:       190, # Switch3 enable
+    0x14:       110, # Switch1 reset
+    0x24:       110, # Switch1 enable
+    0x15:       110, # Switch2 reset
+    0x25:       110, # Switch2 enable
+    0x16:       110, # Switch3 reset
+    0x26:       110, # Switch3 enable
     0x07:       30, # Get FPGA time
 }
 """Operation runtime (ns)

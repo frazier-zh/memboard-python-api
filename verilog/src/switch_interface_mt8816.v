@@ -82,7 +82,7 @@ reg time_enable;
 // FSM logic
 localparam
 	t_reset = 6,
-	t_delay = 9;
+	t_delay = 1;
 
 always @(posedge clk) begin
 	if (rst) begin
