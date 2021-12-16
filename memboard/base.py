@@ -12,42 +12,40 @@ at import of the module.
 """
 class Session(object):
     def __init__(self):
-        self.list = None
+        self.code = None
         self.size = 0
         self.output_index = 0
         self.output_list = []
-        self.output_size = 0
-        self.ret = None
+        self.output = dict()
 
     def __iadd__(self, other):
         return self.add(other)
 
     def add(self, other):
         if isinstance(other, np.ndarray):
-            if self.list is not None:
-                    self.list = np.concatenate((self.list, other))
+            if self.code is not None:
+                    self.code = np.concatenate((self.code, other))
                     self.size += other.shape[0]
             else:
-                self.list = other
+                self.code = other
                 self.size = other.shape[0]
-
-    def get_code(self):
-        return self.list
 
     def assign_output(self, width=0):
         if width==0:
             return
         self.output_index += 1
         self.output_list.append(width)
-        self.output_size += width
         return self.output_index
+
+    def get_output_size(self):
+        return np.sum(self.output_list)
 
     def clear():
         pass
 
 # Key variables
-__session = Session()
-output = dict()
+__ss = Session()
+output = __ss.output
 
 def allow_emulate(width=0):
     """Decorator allow formalize definition of atom operations.
@@ -61,10 +59,10 @@ def allow_emulate(width=0):
         def wrapper(*args, **kwargs):
             code = func(*args, **kwargs)
 
-            global __session
+            global __ss
             if is_emulate():
-                __session.add(code)
-                return __session.assign_output(width)
+                __ss.add(code)
+                return __ss.assign_output(width)
             else:
                 pass
                 # TODO: execute_once(code)
@@ -123,27 +121,27 @@ class connect(object):
             return True
 
 def clear():
-    global __session
-    __session.clear()
+    global __ss
+    __ss.clear()
 
 def add(run):
-    global __session
+    global __ss
 
     with start_emulate():
-        ret = run()
+        run()
 
 def execute(func=None, every=0, total=0, filename='temp'):
-    global __session
+    global __ss
 
     if func is None:
-        if __session.size==0:
+        if __ss.size==0:
             __module_logger.warn('No task found.')
             return
     else:
         add(func)
 
     run_time = 0
-    for ops in __session.list:
+    for ops in __ss.code:
         run_time += get_runtime(ops)
 
     if run_time > every:
@@ -156,8 +154,8 @@ def execute(func=None, every=0, total=0, filename='temp'):
     # Print output info
     print(f"""
 ======== Execution Summary ========
-Total commands:       {__session.size}
-Output size (byte):   {__session.output_size*2}
+Total commands:       {__ss.size}
+Output size (byte):   {__ss.get_output_size()*2}
 Execution time:       {u.to_pretty(run_time)}
 Execution every:      {u.to_pretty(every)}
 Total time:           {u.to_pretty(total)}
@@ -171,7 +169,7 @@ Memory file (debug):  ./{filename}.mem*
         """Generate verilog memory file, used in host simulation
         """
         with open(filename+'.mem1', 'w') as file:
-            mem = device.to_byte(__session.list)
+            mem = device.to_byte(__ss.code)
             length = len(mem)
             for i in range(int(length/4)):
                 file.write('{:02x} {:02x} {:02x} {:02x}\n'\
@@ -187,11 +185,11 @@ Memory file (debug):  ./{filename}.mem*
     device.trigger_in(0x40, 1) # Reset memory block
     device.trigger_in(0x40, 2) # Reset fifo blocks
 
-    device.pipe_in(0x81, device.to_byte_single(device.to_tick(every), 6))# Load clock counter
-    device.pipe_in(0x80, device.to_byte(__session.list)) # Load program
+    device.pipe_in(0x81, u.to_byte(u.to_tick(every), 6))# Load clock counter
+    device.pipe_in(0x80, u.to_byte(__ss.code)) # Load program
 
-    data_result = bytearray(__session.output_list.count(2)*2) # Pipe out container
-    time_result = bytearray(__session.output_list.count(6)*6) # Pipe out container
+    data_result = bytearray(__ss.output_list.count(2)*2) # Pipe out container
+    time_result = bytearray(__ss.output_list.count(6)*6) # Pipe out container
 
     device.wire_in(0x00, 1) # Enable execution
     stop_time = total/u.s
@@ -205,12 +203,13 @@ Memory file (debug):  ./{filename}.mem*
                 file.write(data_result)
         device.wire_in(0x00, 0) # Stop execution
 
-    convert(filename)
+    if not __debug:
+        convert(filename)
 
 import csv
 def convert(filename='temp'):
-    global __session
-    read_size = __session.output_size * 2
+    global __ss
+    read_size = __ss.get_output_size() * 2
 
     with open(filename+'.csv', 'w', newline='') as csvfile:
         fieldnames = [str(key) for key in output.keys()]
@@ -220,14 +219,19 @@ def convert(filename='temp'):
         with open(filename+'.dat', 'rb') as file:
             data = file.read(read_size)
             while data:
-                data_processed = np.zeros(__session.output_index, dtype=np.uint64)
-                for i in range(__session.output_index):
+                data_16b = u.from_byte(data)
+                values = []
+                for i in range(__ss.output_index):
                     value = 0
-                    for j in range(__session.output_list[i]):
-                        value <<= 8
-                        value += data[0]
+                    for j in range(__ss.output_list[i]):
+                        value = (value<<16) + data_16b[0]
                         del data[0]
+                    values.append(value)
 
                 temp_dict = output.copy()
+                for key in temp_dict.keys:
+                    temp_dict[key] = values[temp_dict[key]]
 
+                writer.writerow(temp_dict)
                 data = file.read(read_size)
+                

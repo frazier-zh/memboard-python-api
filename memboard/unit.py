@@ -1,14 +1,14 @@
 """Unit conversion definition
 """
 import sys
+import numpy as np
 
 # Base units
 #   Name        Shortcut    Value   Type
 base_units = [
     ['Voltage', 'V',        1,      float],
     ['Ampere',  'A',        1,      float],
-    ['Second',  's',        1e9,    int],
-    ['Ohm',     'Ohm',      1,      float]
+    ['Second',  's',        1e9,    int]
 ]
 
 # Prefix
@@ -36,8 +36,12 @@ for unit in base_units:
 min = 60 * s
 hour = 60 * min
 day = 24 * hour
+ohm = V/A
 
 def to_pretty(time):
+    """Convert time to display-friendly format
+    HH:MM:SS.
+    """
     if time > s:
         data_str = '{:02d}:{:02d}:{:02d}'.format(
             int(time/hour), int(time%hour/min), int(time%min/s)
@@ -51,3 +55,58 @@ def to_pretty(time):
     else:
         return '{:d} ns'.format(int(time/ns))
     
+
+# Bit stream conversion
+def to_byte(value, nbyte=4):
+    if isinstance(value, int):
+        ord_barray = value.to_bytes(nbyte, 'big')
+    elif isinstance(value, np.ndarray):
+        ord_barray = value.byteswap().tobytes()
+
+    ok_barray = bytearray(len(ord_barray))
+    ok_barray[::2] = ord_barray[1::2]
+    ok_barray[1::2] = ord_barray[::2]
+    return ok_barray
+
+def from_byte(ok_barray):
+    return np.frombuffer(ok_barray, dtype=np.uint16)
+
+# Time conversion
+def to_tick(time):
+    return int(time/10/ns)
+
+def to_time(tick):
+    return tick*10*ns
+
+# Voltage integer conversion
+def to_voltage(value):
+    return value/0xFFF*24-12
+
+def to_int(voltage):
+    return int((voltage+12)/24*0xFFF)
+
+
+# Operataion execution time
+_op_runtime = {
+    0x00:       30, # Do nothing
+    0x11:       20, # ADC reset
+    0x21:       1390, # ADC enable
+    0x12:       50, # DAC reset
+    0x22:       60, # DAC enable
+    0x03:       10, # Wait, 10ns
+    0x13:       0x1000000, # Wait, 0x1000000 * 10ns
+    0x14:       110, # Switch1 reset
+    0x24:       110, # Switch1 enable
+    0x15:       110, # Switch2 reset
+    0x25:       110, # Switch2 enable
+    0x16:       110, # Switch3 reset
+    0x26:       110, # Switch3 enable
+    0x07:       30, # Get FPGA time
+}
+
+def get_runtime(ops):
+    op_byte = ops%0x100
+    if op_byte in [0x03, 0x13]:
+        return (_op_runtime[op_byte]*(ops>>8)+_op_runtime[0]) *u.ns
+    else:
+        return (_op_runtime[op_byte]+_op_runtime[0]) *u.ns

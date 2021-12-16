@@ -1,5 +1,6 @@
 from .base import allow_emulate
 import logging
+from . import unit as u
 
 __module_logger = logging.getLogger(__name__)
 
@@ -141,7 +142,6 @@ switch_connection = {
     2: [-1,     3,      1]
 }
 
-from .statistics import to_int, to_voltage
 def ground(pin):
     group, _ = to_switch_group(pin)
     if [group][0]==-1:
@@ -166,7 +166,7 @@ def apply(pin, v=None):
     
     # Just connect to DAC if voltage is not given
     if v is not None:
-        dac(channel=channel, value=to_int(v))
+        dac(channel=channel, value=u.to_int(v))
     else:
         __module_logger.warn(f'Pin {pin} is connected to DAC-{channel} by default.')
 

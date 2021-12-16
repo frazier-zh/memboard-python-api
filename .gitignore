@@ -1,6 +1,6 @@
 __pycache__/
 .vscode/
 
-*.pkl
-*.out
+*.csv
+*.dat
 *.mem*
