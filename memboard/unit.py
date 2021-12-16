@@ -107,6 +107,6 @@ _op_runtime = {
 def get_runtime(ops):
     op_byte = ops%0x100
     if op_byte in [0x03, 0x13]:
-        return (_op_runtime[op_byte]*(ops>>8)+_op_runtime[0]) *u.ns
+        return (_op_runtime[op_byte]*(ops>>8)+_op_runtime[0]) *ns
     else:
-        return (_op_runtime[op_byte]+_op_runtime[0]) *u.ns
+        return (_op_runtime[op_byte]+_op_runtime[0]) *ns
