@@ -92,7 +92,6 @@ class start_emulate(object):
 
 import time
 from . import unit as u
-from .statistics import get_runtime
 from . import device
 
 __debug = False
@@ -142,7 +141,7 @@ def execute(func=None, every=0, total=0, filename='temp'):
 
     run_time = 0
     for ops in __ss.code:
-        run_time += get_runtime(ops)
+        run_time += u.get_runtime(ops)
 
     if run_time > every:
         __module_logger.warn(f'Execution takes longer than the given interval {u.to_pretty(run_time)} > {u.to_pretty(every)}.')
