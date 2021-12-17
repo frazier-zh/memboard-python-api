@@ -155,7 +155,6 @@ NET "hi_in<7>" OFFSET = IN 13.33 ns VALID 20.83 ns BEFORE "hi_in<0>" RISING;
 ## System Clocks                                                        
 ############################################################################
 NET "CLK" LOC = AB13 | IOSTANDARD = LVCMOS33;
-NET "CLK2" LOC = Y11 | IOSTANDARD = LVCOMS33;
 
 ############################################################################
 ## Peripherals                                                          
