@@ -10,3 +10,6 @@ src/*
 !src/top_isim.tcl
 !src/top_isim.prj
 !src/top_isim.bat
+
+sample.pipetest/*
+!sample.pipetest/Pipetest.bit

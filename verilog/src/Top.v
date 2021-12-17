@@ -95,7 +95,7 @@ assign logic_rdy_trig = logic_rdy & ~logic_rdy_delay;
 
 okWireIn okWireIn00(.ok1(ok1),.ep_addr(8'h00),.ep_dataout(wire_in));
 okTriggerIn okTriggerIn40(.ok1(ok1),.ep_addr(8'h40),.ep_clk(CLK),.ep_trigger(trig_in));
-okTriggerOut okTriggerOut60(.ok1(ok1),.ok2(ok2x[3*17 +: 17]),.ep_addr(8'h60),.ep_clk(CLK),.ep_trigger({15'b0, logic_rdy_trig}));
+okTriggerOut okTriggerOut60(.ok1(ok1),.ok2(ok2x[0*17 +: 17]),.ep_addr(8'h60),.ep_clk(CLK),.ep_trigger({15'b0, logic_rdy_trig}));
 
 // Memory interface
 wire data32_in_empty;
@@ -106,7 +106,7 @@ wire [31:0] data32_in, main_bus;
 
 okPipeIn okPipeIn80(
 	.ok1(ok1),
-	.ok2(ok2x[0*17 +: 17]),
+	.ok2(ok2x[1*17 +: 17]),
 	.ep_addr(8'h80),
 	.ep_write(data16_write),
 	.ep_dataout(data16_in)
@@ -126,7 +126,7 @@ FIFO_16b_32b_64 fifo_data_in(
 
 okPipeOut okPipeOutA0(
 	.ok1(ok1),
-	.ok2(ok2x[1*17 +: 17]),
+	.ok2(ok2x[2*17 +: 17]),
 	.ep_addr(8'hA0),
 	.ep_read(data16_read),
 	.ep_datain(data16_out)
@@ -166,7 +166,7 @@ wire [47:0] time_out;
 
 okPipeIn okPipeIn81(
 	.ok1(ok1),
-	.ok2(ok2x[2*17 +: 17]),
+	.ok2(ok2x[3*17 +: 17]),
 	.ep_addr(8'h81),
 	.ep_write(time16_write),
 	.ep_dataout(time16_in)
