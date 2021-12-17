@@ -37,8 +37,8 @@ class Session(object):
         self.output_list.append(width)
         return self.output_index
 
-    def get_output_size(self):
-        return np.sum(self.output_list)
+    def get_output_bytes(self):
+        return np.sum(self.output_list) * 2
 
     def clear():
         pass
@@ -129,7 +129,7 @@ def add(run):
     with start_emulate():
         run()
 
-def execute(func=None, every=0, total=0, filename='temp'):
+def execute(func=None, every=0, total=0, filename='tmp'):
     global __ss
 
     if func is None:
@@ -154,7 +154,7 @@ def execute(func=None, every=0, total=0, filename='temp'):
     print(f"""
 ======== Execution Summary ========
 Total commands:       {__ss.size}
-Output size (byte):   {__ss.get_output_size()*2}
+Output size (byte):   {__ss.get_output_bytes()}
 Execution time:       {u.to_pretty(run_time)}
 Execution every:      {u.to_pretty(every)}
 Total time:           {u.to_pretty(total)}
@@ -168,14 +168,14 @@ Memory file (debug):  ./{filename}.mem*
         """Generate verilog memory file, used in host simulation
         """
         with open(filename+'.mem1', 'w') as file:
-            mem = device.to_byte(__ss.code)
+            mem = u.to_byte(__ss.code)
             length = len(mem)
             for i in range(int(length/4)):
                 file.write('{:02x} {:02x} {:02x} {:02x}\n'\
                     .format(mem[4*i], mem[4*i+1], mem[4*i+2], mem[4*i+3]))
 
         with open(filename+'.mem2', 'w') as file:
-            mem = device.to_byte_single(device.to_tick(every), 6)
+            mem = u.to_byte(u.to_tick(every), 6)
             for v in mem:
                 file.write('{:02x} '.format(v))
 
@@ -187,8 +187,7 @@ Memory file (debug):  ./{filename}.mem*
     device.pipe_in(0x81, u.to_byte(u.to_tick(every), 6))# Load clock counter
     device.pipe_in(0x80, u.to_byte(__ss.code)) # Load program
 
-    data_result = bytearray(__ss.output_list.count(2)*2) # Pipe out container
-    time_result = bytearray(__ss.output_list.count(6)*6) # Pipe out container
+    result = bytearray(__ss.get_output_bytes()) # Pipe out container
 
     device.wire_in(0x00, 1) # Enable execution
     stop_time = total/u.s
@@ -196,19 +195,18 @@ Memory file (debug):  ./{filename}.mem*
         start_time = time.time()
         while time.time()-start_time<stop_time:
             if device.wait_trigger_out(0x60, 0):
-                device.pipe_out(0xA1, time_result)
-                device.pipe_out(0xA0, data_result)
-                file.write(time_result)
-                file.write(data_result)
+                device.pipe_out(0xA, result)
+                file.write(result)
+
         device.wire_in(0x00, 0) # Stop execution
 
     if not __debug:
         convert(filename)
 
 import csv
-def convert(filename='temp'):
+def convert(filename='tmp'):
     global __ss
-    read_size = __ss.get_output_size() * 2
+    read_size = __ss.get_output_bytes()
 
     with open(filename+'.csv', 'w', newline='') as csvfile:
         fieldnames = [str(key) for key in output.keys()]
