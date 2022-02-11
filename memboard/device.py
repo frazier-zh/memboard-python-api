@@ -64,6 +64,8 @@ def try_to(code, throw=True):
     else:
         if throw:
             raise RuntimeError(error_codes[code])
+        else:
+            __module_logger.error(error_codes[code])
 
 def open():
     try_to(__device.GetDeviceCount())

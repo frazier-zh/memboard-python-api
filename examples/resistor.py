@@ -13,5 +13,5 @@ def run():
     output['current'] = measure(pin=bottom_pin, drive_pin=top_pin, v=1 *u.V)
 
 
-with mb.connect('../verilog/src/top.bit'):
+with mb.connect('./verilog/src/top.bit'):
     mb.execute(run, every=200 *u.us, total=5 *u.s, filename='test')

@@ -195,7 +195,7 @@ Memory file (debug):  ./{filename}.mem*
         start_time = time.time()
         while time.time()-start_time<stop_time:
             if device.wait_trigger_out(0x60, 0):
-                device.pipe_out(0xA, result)
+                device.pipe_out(0xA0, result)
                 file.write(result)
 
         device.wire_in(0x00, 0) # Stop execution
