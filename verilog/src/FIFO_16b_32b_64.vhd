@@ -22,7 +22,7 @@
 --    devices, or systems.  Use in such applications are expressly            --
 --    prohibited.                                                             --
 --                                                                            --
---    (c) Copyright 1995-2021 Xilinx, Inc.                                    --
+--    (c) Copyright 1995-2022 Xilinx, Inc.                                    --
 --    All rights reserved.                                                    --
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -179,17 +179,17 @@ END COMPONENT;
       c_msgon_val => 1,
       c_optimization_mode => 0,
       c_overflow_low => 0,
-      c_preload_latency => 1,
-      c_preload_regs => 0,
+      c_preload_latency => 0,
+      c_preload_regs => 1,
       c_prim_fifo_type => "512x36",
-      c_prog_empty_thresh_assert_val => 2,
+      c_prog_empty_thresh_assert_val => 4,
       c_prog_empty_thresh_assert_val_axis => 1022,
       c_prog_empty_thresh_assert_val_rach => 1022,
       c_prog_empty_thresh_assert_val_rdch => 1022,
       c_prog_empty_thresh_assert_val_wach => 1022,
       c_prog_empty_thresh_assert_val_wdch => 1022,
       c_prog_empty_thresh_assert_val_wrch => 1022,
-      c_prog_empty_thresh_negate_val => 3,
+      c_prog_empty_thresh_negate_val => 5,
       c_prog_empty_type => 0,
       c_prog_empty_type_axis => 0,
       c_prog_empty_type_rach => 0,
@@ -197,14 +197,14 @@ END COMPONENT;
       c_prog_empty_type_wach => 0,
       c_prog_empty_type_wdch => 0,
       c_prog_empty_type_wrch => 0,
-      c_prog_full_thresh_assert_val => 125,
+      c_prog_full_thresh_assert_val => 127,
       c_prog_full_thresh_assert_val_axis => 1023,
       c_prog_full_thresh_assert_val_rach => 1023,
       c_prog_full_thresh_assert_val_rdch => 1023,
       c_prog_full_thresh_assert_val_wach => 1023,
       c_prog_full_thresh_assert_val_wdch => 1023,
       c_prog_full_thresh_assert_val_wrch => 1023,
-      c_prog_full_thresh_negate_val => 124,
+      c_prog_full_thresh_negate_val => 126,
       c_prog_full_type => 0,
       c_prog_full_type_axis => 0,
       c_prog_full_type_rach => 0,

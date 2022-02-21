@@ -87,15 +87,15 @@ always @(posedge clk) begin
 		if (~CS) begin
 			case (time_count)
 				0: begin
-						SCLK <= 1;
-					end
+					SCLK <= 1;
+				end
 				2: begin
-						SCLK <= 0;
-						
-						data_count <= data_count + 1;
-						out_a <= {out_a[12:0], DOUTA};
-						out_b <= {out_b[12:0], DOUTB};
-					end
+					SCLK <= 0;
+					
+					data_count <= data_count + 1;
+					out_a <= {out_a[12:0], DOUTA};
+					out_b <= {out_b[12:0], DOUTB};
+				end
 				3: time_count <= 0;
 			endcase
 		end else begin

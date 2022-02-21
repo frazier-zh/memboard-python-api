@@ -81,21 +81,17 @@ okHost okHI(
 okWireOR #(.N(4)) wireOR (.ok2(ok2), .ok2s(ok2x));
 
 // Status and control signal
-wire clock_rst, fifo_rst, mem_rst, logic_rst, logic_en, logic_rdy, logic_rdy_trig;
+wire clock_rst, fifo_rst, mem_rst, logic_rst, logic_en, logic_auto, logic_rdy, logic_rdy_trig;
+wire [15:0] logic_count;
+
 wire [15:0] trig_in, wire_in;
 
 assign {fifo_rst, mem_rst, logic_rst} = trig_in[2:0];
-assign logic_en = wire_in[0];
-assign LED = {7'b0, logic_rdy};
-
-reg logic_rdy_delay;
-always @(posedge CLK)
-	logic_rdy_delay <= logic_rdy;
-assign logic_rdy_trig = logic_rdy & ~logic_rdy_delay;
+assign {logic_auto, logic_en} = wire_in[1:0];
 
 okWireIn okWireIn00(.ok1(ok1),.ep_addr(8'h00),.ep_dataout(wire_in));
+okWireOut okWireOut20(.ok1(ok1),.ok2(ok2x[0*17 +: 17]),.ep_addr(8'h20),.ep_datain(logic_count));
 okTriggerIn okTriggerIn40(.ok1(ok1),.ep_addr(8'h40),.ep_clk(CLK),.ep_trigger(trig_in));
-okTriggerOut okTriggerOut60(.ok1(ok1),.ok2(ok2x[0*17 +: 17]),.ep_addr(8'h60),.ep_clk(CLK),.ep_trigger({15'b0, logic_rdy_trig}));
 
 // Memory interface
 wire data32_in_empty;
@@ -144,18 +140,17 @@ FIFO_16b_16b_1k fifo_data_out(
 	.empty()
 );
 
-wire mblock_read, mblock_clr, mblock_valid;
-
+wire mem_read, mem_zero, mem_valid;
 memory_control mem_ctrl(
 	.clk(CLK),
-	.data_in_empty(data32_in_empty),
-	.data_read(data_read),
-	.data_in(data32_in),
-	.data_out(main_bus),
+	.din_empty(data32_in_empty),
+	.din_read(data_read),
+	.din(data32_in),
+	.dout_read(mem_read),
+	.dout(main_bus),
 	.rst(mem_rst),
-	.zero(mblock_clr),
-	.rd_en(mblock_read),
-	.valid(mblock_valid)
+	.zero(mem_zero),
+	.valid(mem_valid)
 );
 
 // Clock interface
@@ -172,8 +167,7 @@ okPipeIn okPipeIn81(
 	.ep_dataout(time16_in)
 );
 
-wire cd_en, cd_rdy, clock_en;
-
+wire cd_en, cd_rdy, clock_clr;
 multiclock_interface clock(
 	.clk(CLK),
 	.ti_clk(ti_clk),
@@ -181,7 +175,7 @@ multiclock_interface clock(
 	.data_in(time16_in),
 	.cd_en(cd_en),
 	.cd_rdy(cd_rdy),
-	.en(clock_en),
+	.clr(clock_clr),
 	.data_out(time_out)
 );
 
@@ -198,14 +192,18 @@ wire [6:0] dev_rdy;
 assign dev_rdy[0] = 1;
 wire [13:0] adc_out;
 
+assign LED[7:0] = {logic_rdy, dev_rdy};
+
 logic_control logic_ctrl(
 	.clk(CLK),
-	.en(logic_en),
 	.rst(logic_rst),
 	.rdy(logic_rdy),
-	.mblock_read(mblock_read),
-	.mblock_clr(mblock_clr),
-	.mblock_valid(mblock_valid),
+	.en(logic_en),
+	.auto_en(logic_auto),
+	.auto_count(logic_count),
+	.mem_read(mem_read),
+	.mem_zero(mem_zero),
+	.mem_valid(mem_valid),
 	.dev_no(dev_no),
 	.dev_op_rst(op_bus[0]),
 	.dev_cs(dev_cs),
@@ -216,7 +214,7 @@ logic_control logic_ctrl(
 	.time_out(time_out),
 	.cd_en(cd_en),
 	.cd_rdy(cd_rdy),
-	.clock_en(clock_en)
+	.clock_clr(clock_clr)
 );
 
 // Device definitions

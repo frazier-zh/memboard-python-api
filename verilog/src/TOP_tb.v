@@ -128,12 +128,10 @@ module top_tb;
 
 	integer f;
 	
+	initial CLK = 1;	
 	// Clock
-	initial begin
-		CLK = 1'b0;
-		forever #5 CLK = ~CLK;
-	end
-
+	always #5 CLK = ~CLK;
+	
 	// ADC Behaviour
 	always @(negedge CNVST_ADC) begin
 		#40 BUSY_ADC = 1;
@@ -145,30 +143,31 @@ module top_tb;
 		DOUTA_ADC <= $random;
 		DOUTB_ADC <= $random;
 	end
-
+	
+	
 	// Main
 	initial begin
 		FrontPanelReset;
 		
-		#1000
+		CLK = 1;
 
 		ActivateTriggerIn(8'h40, 0);
 		ActivateTriggerIn(8'h40, 1);
 		ActivateTriggerIn(8'h40, 2);
 
-		$readmemh("../../scan.mem1", pipeIn);
-		$readmemh("../../scan.mem2", pipeIn2);
+		$readmemh("../../debug.mem1", pipeIn);
+		$readmemh("../../debug.mem2", pipeIn2);
 		WriteToPipeIn2(8'h81, pipeIn2Size);
 		WriteToPipeIn(8'h80, pipeInSize);
 
-		SetWireInValue(8'h00, 1, 16'hffff);
+		SetWireInValue(8'h00, 2'b11, 16'hffff);
 		UpdateWireIns;
 
 		// Start execution
-		#30000
+		#3000
 		ReadFromPipeOut(8'hA0, pipeOutSize);
 
-		f = $fopen("../../scan.out", "w");
+		f = $fopen("../../debug.out", "w");
 		for (k=0; k<pipeOutSize; k=k+1)
 			$fwrite(f, "%02x\n", pipeOut[k]);
 		$fclose(f);

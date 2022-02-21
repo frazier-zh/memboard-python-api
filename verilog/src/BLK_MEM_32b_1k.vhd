@@ -22,7 +22,7 @@
 --    devices, or systems.  Use in such applications are expressly            --
 --    prohibited.                                                             --
 --                                                                            --
---    (c) Copyright 1995-2021 Xilinx, Inc.                                    --
+--    (c) Copyright 1995-2022 Xilinx, Inc.                                    --
 --    All rights reserved.                                                    --
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -48,10 +48,7 @@ ENTITY BLK_MEM_32b_1k IS
     dina : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
     clkb : IN STD_LOGIC;
     addrb : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
-    doutb : OUT STD_LOGIC_VECTOR(31 DOWNTO 0);
-    sbiterr : OUT STD_LOGIC;
-    dbiterr : OUT STD_LOGIC;
-    rdaddrecc : OUT STD_LOGIC_VECTOR(9 DOWNTO 0)
+    doutb : OUT STD_LOGIC_VECTOR(31 DOWNTO 0)
   );
 END BLK_MEM_32b_1k;
 
@@ -65,10 +62,7 @@ COMPONENT wrapped_BLK_MEM_32b_1k
     dina : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
     clkb : IN STD_LOGIC;
     addrb : IN STD_LOGIC_VECTOR(9 DOWNTO 0);
-    doutb : OUT STD_LOGIC_VECTOR(31 DOWNTO 0);
-    sbiterr : OUT STD_LOGIC;
-    dbiterr : OUT STD_LOGIC;
-    rdaddrecc : OUT STD_LOGIC_VECTOR(9 DOWNTO 0)
+    doutb : OUT STD_LOGIC_VECTOR(31 DOWNTO 0)
   );
 END COMPONENT;
 
@@ -100,8 +94,8 @@ END COMPONENT;
       c_has_regceb => 0,
       c_has_rsta => 0,
       c_has_rstb => 0,
-      c_has_softecc_input_regs_a => 1,
-      c_has_softecc_output_regs_b => 1,
+      c_has_softecc_input_regs_a => 0,
+      c_has_softecc_output_regs_b => 0,
       c_init_file => "BlankString",
       c_init_file_name => "no_coe_file_loaded",
       c_inita_val => "0",
@@ -126,7 +120,7 @@ END COMPONENT;
       c_use_byte_web => 0,
       c_use_default_data => 0,
       c_use_ecc => 0,
-      c_use_softecc => 1,
+      c_use_softecc => 0,
       c_wea_width => 1,
       c_web_width => 1,
       c_write_depth_a => 1024,
@@ -148,10 +142,7 @@ U0 : wrapped_BLK_MEM_32b_1k
     dina => dina,
     clkb => clkb,
     addrb => addrb,
-    doutb => doutb,
-    sbiterr => sbiterr,
-    dbiterr => dbiterr,
-    rdaddrecc => rdaddrecc
+    doutb => doutb
   );
 -- synthesis translate_on
 

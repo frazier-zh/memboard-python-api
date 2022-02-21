@@ -29,31 +29,18 @@ module multiclock_interface(
 	 output cd_rdy,
 	 
 	 // Clock time output
-	 input en,
+	 input clr,
 	 output [47:0] data_out
     );
 	
-reg cd_load;
+wire cd_load;
+assign cd_load = ~cd_en;
 reg [47:0] counter_data;
-wire clr;
-assign clr = ~en;
-
-wire cd_en_oneshot;
-reg cd_en_delay;
-always @(posedge clk)
-	cd_en_delay <= cd_en;
-assign cd_en_oneshot = cd_en & ~cd_en_delay;
 
 always @(posedge ti_clk)
 	if (data_write == 1) begin
 		counter_data <= {counter_data[31:0], data_in};
 	end
-
-always @(posedge clk)
-	if ((cd_en_oneshot == 1) || (cd_rdy == 1))
-		cd_load <= 1;
-	else
-		cd_load <= 0;
 
 BC_DOWN_48b counter(
 	.clk(clk),
@@ -65,7 +52,6 @@ BC_DOWN_48b counter(
 
 BC_UP_48b clock(
 	.clk(clk),
-	.ce(en),
 	.sclr(clr),
 	.q(data_out)
 );

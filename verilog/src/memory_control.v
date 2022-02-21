@@ -21,58 +21,60 @@
 module memory_control(
     input clk,
 	 
-	 input data_in_empty,
-	 output data_read,
-    input [31:0] data_in,
-    output [31:0] data_out,
+	 input din_empty,
+	 output din_read,
+    input [31:0] din,
+	 
+	 input dout_read,
+    output [31:0] dout,
 	 
 	 input rst,
 	 input zero,
-	 input rd_en,
 	 output reg valid
     );
 
-reg wr_en = 0;
-reg [9:0] wr_addr = 0;
+wire wr_en;
+reg wr_wait;
 reg [9:0] rd_addr = 0;
+reg [9:0] wr_addr = 0;
+
+assign din_read = ~din_empty;
+assign wr_en = din_read;
 
 BLK_MEM_32b_1k blk_mem(
 	 .clka(clk),
     .wea(wr_en),
     .addra(wr_addr),
-    .dina(data_in),
+    .dina(din),
     .clkb(clk),
     .addrb(rd_addr),
-    .doutb(data_out)
+    .doutb(dout)
 );
 
-assign data_read = ~data_in_empty;
-
-always @*
-	if (rd_addr == wr_addr+1)
-		valid = 0;
-	else
-		valid = 1;
-
 always @(posedge clk) begin
-	if (rst == 1) begin
+	if (rst) begin
 		wr_addr <= 0;
-		rd_addr <= 1;
-		wr_en <= 0;
+		rd_addr <= 0;
+		valid <= 0;
 	end else begin
-		if (zero == 1) begin
-			rd_addr <= 1;
+		if (zero) begin
+			rd_addr <= 0;
+			if (wr_addr > 0)
+				valid <= 1;
+			else
+				valid <= 0;
+		end else if (dout_read && valid) begin
+			rd_addr <= rd_addr+1;
+			if (rd_addr+1 == wr_addr)
+				valid <= 0;
 		end
-		
-		if (data_read == 1) begin
-			wr_en <= 1;
-			wr_addr <= wr_addr + 1;
-		end else begin
-			wr_en <= 0;
-		end
-	
-		if ((rd_en == 1) && (valid == 1))
-			rd_addr <= rd_addr + 1;
+
+		if (wr_en)
+			wr_addr <= wr_addr+1;
+
+		wr_wait <= wr_en;
+		if (wr_wait)
+			valid <= 1;		
 	end
 end
 

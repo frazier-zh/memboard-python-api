@@ -22,7 +22,7 @@
 --    devices, or systems.  Use in such applications are expressly            --
 --    prohibited.                                                             --
 --                                                                            --
---    (c) Copyright 1995-2021 Xilinx, Inc.                                    --
+--    (c) Copyright 1995-2022 Xilinx, Inc.                                    --
 --    All rights reserved.                                                    --
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -43,7 +43,6 @@ LIBRARY XilinxCoreLib;
 ENTITY BC_UP_48b IS
   PORT (
     clk : IN STD_LOGIC;
-    ce : IN STD_LOGIC;
     sclr : IN STD_LOGIC;
     q : OUT STD_LOGIC_VECTOR(47 DOWNTO 0)
   );
@@ -54,7 +53,6 @@ ARCHITECTURE BC_UP_48b_a OF BC_UP_48b IS
 COMPONENT wrapped_BC_UP_48b
   PORT (
     clk : IN STD_LOGIC;
-    ce : IN STD_LOGIC;
     sclr : IN STD_LOGIC;
     q : OUT STD_LOGIC_VECTOR(47 DOWNTO 0)
   );
@@ -69,7 +67,7 @@ END COMPONENT;
       c_count_mode => 0,
       c_count_to => "1",
       c_fb_latency => 0,
-      c_has_ce => 1,
+      c_has_ce => 0,
       c_has_load => 0,
       c_has_sclr => 1,
       c_has_sinit => 0,
@@ -92,7 +90,6 @@ BEGIN
 U0 : wrapped_BC_UP_48b
   PORT MAP (
     clk => clk,
-    ce => ce,
     sclr => sclr,
     q => q
   );
