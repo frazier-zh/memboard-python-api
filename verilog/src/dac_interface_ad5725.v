@@ -29,36 +29,35 @@ module dac_interface_ad5725(
     input clk,
 	 input cs,
 	 output reg rdy,
+	 output reg [3:0] state,
+	 
 	 input [3:0] op,
     input [7:0] addr,
     input [15:0] data_in
     );
 
 // Arguments
-reg en = 0, rst = 0;
-reg [1:0] channel;
-reg [11:0] data_buffer;
+wire en, rst;
+assign rst = cs ? op[0] : 0;
+assign en = cs ? op[1] : 0;
+
+reg [1:0] channel = 0;
+reg [11:0] data_buffer = 0;
 
 always @(posedge clk)
 	if (cs == 1) begin
-		rst <= op[0];
-		en <= op[1];
 		channel <= addr[1:0];
 		data_buffer <= data_in[11:0];
-	end else begin
-		rst <= 0;
-		en <= 0;
-	end
-	
+	end 
+
 // FSM basic
 localparam
-	s_reset =	4'b0001,
-	s_clear =	4'b0010,
-	s_idle =		4'b0100,
-	s_set =		4'b1000;
-reg [5:0] state;
-reg [7:0] time_count;
-reg time_enable;
+	s_reset = 1,
+	s_clear = 4,
+	s_idle =	0,
+	s_start = 2;
+reg [7:0] time_count = 0;
+reg time_enable = 0;
 
 // FSM logic
 localparam
@@ -103,14 +102,14 @@ always @(posedge clk) begin
 				
 			s_idle:
 				if (en == 1) begin
-					state <= s_set;
+					state <= s_start;
 					rdy <= 0;
 					time_enable <= 1;
 				end else begin
 					state <= s_idle;
 				end
 				
-			s_set:
+			s_start:
 				case (time_count)
 					0: begin
 						RW <= 0;

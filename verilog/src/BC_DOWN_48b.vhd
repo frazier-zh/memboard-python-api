@@ -22,7 +22,7 @@
 --    devices, or systems.  Use in such applications are expressly            --
 --    prohibited.                                                             --
 --                                                                            --
---    (c) Copyright 1995-2021 Xilinx, Inc.                                    --
+--    (c) Copyright 1995-2022 Xilinx, Inc.                                    --
 --    All rights reserved.                                                    --
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
@@ -43,6 +43,7 @@ LIBRARY XilinxCoreLib;
 ENTITY BC_DOWN_48b IS
   PORT (
     clk : IN STD_LOGIC;
+    ce : IN STD_LOGIC;
     load : IN STD_LOGIC;
     l : IN STD_LOGIC_VECTOR(47 DOWNTO 0);
     thresh0 : OUT STD_LOGIC;
@@ -55,6 +56,7 @@ ARCHITECTURE BC_DOWN_48b_a OF BC_DOWN_48b IS
 COMPONENT wrapped_BC_DOWN_48b
   PORT (
     clk : IN STD_LOGIC;
+    ce : IN STD_LOGIC;
     load : IN STD_LOGIC;
     l : IN STD_LOGIC_VECTOR(47 DOWNTO 0);
     thresh0 : OUT STD_LOGIC;
@@ -69,21 +71,21 @@ END COMPONENT;
       c_ce_overrides_sync => 0,
       c_count_by => "1",
       c_count_mode => 1,
-      c_count_to => "10",
-      c_fb_latency => 3,
-      c_has_ce => 0,
+      c_count_to => "1",
+      c_fb_latency => 0,
+      c_has_ce => 1,
       c_has_load => 1,
       c_has_sclr => 0,
       c_has_sinit => 0,
       c_has_sset => 0,
       c_has_thresh0 => 1,
-      c_implementation => 1,
+      c_implementation => 0,
       c_latency => 1,
       c_load_low => 0,
-      c_restrict_count => 1,
+      c_restrict_count => 0,
       c_sclr_overrides_sset => 1,
       c_sinit_val => "0",
-      c_thresh0_value => "10",
+      c_thresh0_value => "1",
       c_verbosity => 0,
       c_width => 48,
       c_xdevicefamily => "spartan6"
@@ -94,6 +96,7 @@ BEGIN
 U0 : wrapped_BC_DOWN_48b
   PORT MAP (
     clk => clk,
+    ce => ce,
     load => load,
     l => l,
     thresh0 => thresh0,

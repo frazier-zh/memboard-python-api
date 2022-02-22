@@ -87,11 +87,10 @@ module top_tb;
 	                                  //           host interface checks for ready (0-255)
 	parameter PostReadyDelay = 5;     // REQUIRED: # of clocks after ready is asserted and
 	                                  //           check that the block transfer begins (0-255)
-	parameter lines = 49;
+	parameter lines = 15;
 	parameter pipeInSize = lines*4;   // REQUIRED: byte (must be even) length of default
 	                                  //           PipeIn; Integer 0-2^32
-	parameter outputs = 20;
-	parameter pipeOutSize = outputs*2;// REQUIRED: byte (must be even) length of default
+	parameter pipeOutSize = 8;			 // REQUIRED: byte (must be even) length of default
 	                                  //           PipeOut; Integer 0-2^32
 	parameter pipeIn2Size = 6;
 
@@ -164,7 +163,7 @@ module top_tb;
 		UpdateWireIns;
 
 		// Start execution
-		#3000
+		#7000
 		ReadFromPipeOut(8'hA0, pipeOutSize);
 
 		f = $fopen("../../debug.out", "w");

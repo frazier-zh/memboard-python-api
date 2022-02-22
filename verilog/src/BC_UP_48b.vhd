@@ -73,7 +73,7 @@ END COMPONENT;
       c_has_sinit => 0,
       c_has_sset => 0,
       c_has_thresh0 => 0,
-      c_implementation => 1,
+      c_implementation => 0,
       c_latency => 1,
       c_load_low => 0,
       c_restrict_count => 0,

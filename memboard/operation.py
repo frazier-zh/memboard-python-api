@@ -1,4 +1,5 @@
-from .base import allow_emulate
+from .base import allow_auto
+from .const import dev, op
 import logging
 from . import unit as u
 
@@ -9,19 +10,18 @@ import numpy as np
 def to_code(*args):
     """Convert to bytecode
     Args:
-        [[width, value], ...], ...
-        Width indicates bit width of given Value.
+        [dev:4, op:4, addr:8, value:16/24], ...
+        'value:size' indicates bit size of given Value.
     """
     code = np.zeros(len(args), dtype=np.uint32)
-    for i, arg in enumerate(args):
-        shift = 0
-        value = 0
-        for nbit_value in arg:
-            value += (nbit_value[1] % (1<<nbit_value[0])) << shift
-            shift += nbit_value[0]
-
-        value = int(value)
-        code[i] = value % 0x100000000
+    for i, inst in enumerate(args):
+        code[i] = inst[0]
+        if len(inst) == 4:
+            code[i] += (inst[1]<<4)+(inst[2]<<8)+(inst[3]<<16)
+        elif len(inst) == 3:
+            code[i] += (inst[1]<<4)+(inst[2]<<8)
+        elif len(inst) == 2:
+            code[i] += (inst[1]<<4)
 
     return code
 
@@ -37,18 +37,18 @@ Notice:
     control, for compatibility and FPGA stability, non-blocking mode is
     recommended on all platform.
 
-    @allow_emulate should always be used for any atom operation to be
+    @allow_auto should always be used for any atom operation to be
     created in the future.
 """
-@allow_emulate(width=1)
+@allow_auto(size=1)
 def adc(channel=0):
     """ADC control
     """
     if channel not in [0, 1]:
         raise ValueError("Invalid ADC channel.")
-    return to_code([[4, 1], [4, 2], [8, channel]])
+    return to_code([dev.adc, op.enable, channel])
 
-@allow_emulate()
+@allow_auto()
 def dac(channel=0, value=0x800):
     """DAC control
     """
@@ -59,31 +59,31 @@ def dac(channel=0, value=0x800):
     if value not in range(0x1000):
         raise ValueError("Invalid DAC value, max 0xFFF.")
 
-    return to_code([[4, 2], [4, 2], [8, channel], [16, value]])
+    return to_code([dev.dac, op.enable, channel, value])
 
-@allow_emulate()
+@allow_auto()
 def wait(time):
     """Ask FPGA to wait for a precise time period
     """
-    time = int(time/10)
-    if time<0 or (time>>48):
-        raise ValueError("Invalid waiting time, max= 30 days.")
+    time = int(time/(10*u.ns))
+    if time<5 or (time>>48):
+        raise ValueError("Invalid waiting time, max 30 days.")
     elif time>>24:
         return to_code(
-            [[4, 3], [4, 1], [24, time>>24]],
-            [[4, 3], [4, 0], [24, time % 0x1000000]]
+            [dev.timer, op.high, time>>24],
+            [dev.timer, op.low, time % 0x1000000]
         )
     else:
-        return to_code([[4, 3], [4, 0], [24, time]])
+        return to_code([dev.timer, op.low, time % 0x1000000])
 
 def to_switch_group(pin):
     if pin not in range(1, 84+1):
-        raise ValueError('Invalid pin number (1-86).')
+        raise ValueError('Invalid pin number (1-84).')
     group = int((pin-1)/28)
     pin_in_group = (pin-1)%28
     return group, pin_in_group
 
-@allow_emulate()
+@allow_auto()
 def switch(pin=0, y=0, on=False):
     """Switch control
     """
@@ -92,53 +92,34 @@ def switch(pin=0, y=0, on=False):
     if not isinstance(on, bool):
         raise ValueError("Invalid on/off value.")
     group, x = to_switch_group(pin)
+    return to_code([dev.sw_source+group, op.enable, 0, x+(y<<7)+(on<<11)])
 
-    return to_code([[4, 4+group], [4, 2], [8, 0], [8, x], [4, y], [4, on]])
-
-@allow_emulate(width=3)
+@allow_auto(size=3)
 def time():
     """Get precise time from FPGA
     """
-    return to_code([[4, 7]])
+    return to_code([dev.clock])
 
-device_list = {
-    'adc' : 1,
-    'dac' : 2,
-    'source': 4,
-    'gate': 5,
-    'drain': 6
-}
-@allow_emulate()
+@allow_auto()
 def reset(device):
-    if device == 'all':
-        return to_code(*[[[4, i], [4, 1]] for i in device_list.values()])
-    elif device not in device_list:
-        raise ValueError("Invalid device for reset operation.")
-    else:
-        return to_code([[4, device_list[device]], [4, 1]])
+    return to_code([device, op.reset])
 
 """Definition of compound operation
     Each compound operation consists of multiple atom operation.
-    In non-blocking mode, for-statement and if-else statement is allowed but
-is only inferenced once during repeated execution. Inferring based on return
-value from atom operation is invalid, since all the values are asynchromatic
-reduced.
-    In blocking mode, atom operations are returned when and only when FPGA
-finishes, and return values are immediately valid.
-    @allow_emulate is not allowed to use, since only atom operations are
+    @allow_auto is not allowed to use, since only atom operations are
 allowed to register return value on FPGA.
 """
 def reset_all():
-    reset('adc')
-    reset('dac')
-    reset('source')
-    reset('gate')
-    reset('drain')
+    reset(dev.adc)
+    reset(dev.dac)
+    reset(dev.sw_source)
+    reset(dev.sw_gate)
+    reset(dev.sw_drain)
 
 #   switch  GND     DAC     ADC
 switch_connection = {
-    0: [0,      1,      0],
-    1: [-1,     2,      -1],
+    0: [0,      2,      0],
+    1: [-1,     1,      -1],
     2: [-1,     3,      1]
 }
 
@@ -179,6 +160,7 @@ def measure(pin, drive_pin=None, v=None):
     if drive_pin is not None:
         apply(drive_pin, v)
 
+    wait(2 *u.us)
     ret = adc(channel=channel)
 
     # Turn off DAC/ADC connections

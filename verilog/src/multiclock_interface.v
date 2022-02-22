@@ -25,28 +25,44 @@ module multiclock_interface(
 	 input ti_clk,	
 	 input data_write,
 	 input [15:0] data_in,
-	 input cd_en,
-	 output cd_rdy,
+	 input en,
+	 output rdy,
 	 
 	 // Clock time output
 	 input clr,
 	 output [47:0] data_out
     );
 	
-wire cd_load;
-assign cd_load = ~cd_en;
+reg load = 0;
+reg enable = 0;
+wire thresh;
 reg [47:0] counter_data;
+assign rdy = ~enable;
 
 always @(posedge ti_clk)
 	if (data_write == 1) begin
 		counter_data <= {counter_data[31:0], data_in};
 	end
+	
+always @(posedge clk)  begin
+	if (en) begin
+		load <= 1;
+		enable <= 1;
+	end
+		
+	if (load)
+		load <= 0;
+		
+	if (thresh)
+		enable <= 0;
+end
 
 BC_DOWN_48b counter(
 	.clk(clk),
-	.load(cd_load),
+	.ce(enable),
+	.load(load),
 	.l(counter_data),
-	.thresh0(cd_rdy),
+	.thresh0(thresh),
 	.q()
 );
 

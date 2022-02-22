@@ -24,31 +24,40 @@ module timer_interface(
     input cs,
     output rdy,
     input [3:0] op,
-    input [7:0] addr,
-    input [15:0] data_in
+	 input [23:0] data_in
     );
 
-reg counter_load = 0;
-reg [47:0] counter_data = 0;
-assign rdy = counter_end;
+reg load = 0;
+reg enable = 0;
+reg [47:0] data = 0;
+wire thresh;
 
-always @(posedge clk)
-	if (cs == 1) begin
-		if (op[0] == 0) begin
-			counter_data <= {24'b0, data_in, addr};
+assign rdy = ~enable;
+
+always @(posedge clk) begin
+	if (cs) begin
+		if (op[3] == 0) begin
+			data <= {24'b0, data_in};
 		end else begin
-			counter_data <= {data_in, addr, 24'b0};
+			data <= {data_in, 24'b0};
 		end
-		counter_load <= 1;
-	end else begin
-		counter_load <= 0;
+		load <= 1;
+		enable <= 1;
 	end
+	
+	if (load)
+		load <= 0;
+	
+	if (thresh)
+		enable <= 0;
+end
 
 BC_DOWN_48b counter(
 	.clk(clk),
-	.load(counter_load),
-	.l(counter_data),
-	.thresh0(counter_end),
+	.ce(enable),
+	.load(load),
+	.l(data),
+	.thresh0(thresh),
 	.q()
 );
 

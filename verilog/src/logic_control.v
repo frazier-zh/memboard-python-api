@@ -21,7 +21,7 @@
 module logic_control(
     input clk,
 	 input rst,
-	 output rdy,
+	 output reg [3:0] state,
 	 
 	 input en,
 	 input auto_en,
@@ -31,13 +31,14 @@ module logic_control(
 	 output reg mem_read,
 	 output reg mem_zero,
 	 input mem_valid,
-    input [3:0] dev_no,
-	 input dev_op_rst,
-	 output reg [6:0] dev_cs,
-	 input [6:0] dev_rdy,
+	 input [31:0] mem_in,
+	 output reg [31:0] main_bus,
+
+	 output reg [7:0] dev_cs,
+	 input [7:0] dev_rdy,
 	 
 	 // Result output
-	 output reg data_out_en,
+	 output reg data_write,
     output reg [15:0] data_out,
 	 
 	 // Device
@@ -50,29 +51,29 @@ module logic_control(
 	 output reg clock_clr
     );
 
-reg [3:0] dev_no_s;
-reg dev_op_rst_s;
+wire [3:0] dev_no;
+wire dev_rst;
+assign dev_no = main_bus[3:0];
+assign dev_rst = main_bus[4];
 
 reg [7:0] time_count;
 reg time_enable;
 	
 localparam
 	s_idle = 0,
-	s_next = 1,
-	s_call = 2,
 	s_wait = 3,
-	s_out_adc = 4,
-	s_out_time = 5,
-	s_restart = 6;
-reg [3:0] state;
-assign rdy = (state==s_idle);
+	s_start = 2,
+	s_busy = 5,
+	s_read = 6,
+	s_read2 = 7,
+	s_clear = 4;
 
 always @(posedge clk) begin
 	if (rst) begin
 		state <= s_idle;
 		mem_read <= 0;
 		mem_zero <= 1;
-		data_out_en <= 0;
+		data_write <= 0;
 		dev_cs <= 0;
 		cd_en <= 0;
 		clock_clr <= 1;
@@ -85,97 +86,98 @@ always @(posedge clk) begin
 			
 		case (state)
 			s_idle:
-				if (en) begin
+				if (en && mem_valid) begin
 					clock_clr <= 0;
 					if (auto_en) begin
-						state <= s_restart;
-						cd_en <= 0;
+						state <= s_clear;
+						cd_en <= 1;
+						mem_zero <= 1;
+					end else begin
+						state <= s_wait;
+						mem_zero <= 0;
+					end
+				end else
+					state <= s_idle;
+				
+			s_wait:
+				if (en && mem_valid) begin
+					mem_read <= 1;
+					if (mem_in == 31'b0) begin
+						state <= s_wait;
+					end begin
+						state <= s_start;
+						main_bus <= mem_in;
+						time_enable <= 1;
+					end
+				end else if (en && auto_en) begin
+					if (cd_rdy) begin
+						state <= s_clear;
+						auto_count <= auto_count+1;
+						cd_en <= 1;
 						mem_zero <= 1;
 					end else
-						state <= s_next;
+						state <= s_wait;
 				end else
 					state <= s_idle;
 				
-			s_next:
-				if (en && mem_valid) begin
-					state <= s_call;
-					
-					mem_read <= 1;
-					time_enable <= 1;
-					dev_no_s <= dev_no;
-					dev_op_rst_s <= dev_op_rst;
-					case (dev_no)
-						1,2,3,4,5,6: dev_cs <= 1<<dev_no;
-					endcase
-				end else if (auto_en && cd_rdy) begin
-					state <= s_restart;
-					auto_count <= auto_count+1;
-					cd_en <= 0;
-					mem_zero <= 1;
-				end else
-					state <= s_idle;
-				
-			s_restart: begin
-				state <= s_next;	
-				cd_en <= 1;
+			s_clear: begin
+				state <= s_wait;	
+				cd_en <= 0;
 				mem_zero <= 0;
 			end
 							
-			s_call:
+			s_start:
 				case (time_count)
 					0: begin
-						dev_cs <= 0;
+						dev_cs[dev_no] <= 1;
 						mem_read <= 0;
-						if (dev_no_s == 0) begin
-							state <= s_next;
-							time_enable <= 0;
-						end else if (dev_no_s == 7) begin
-							state <= s_out_time;
-							time_count <= 0;
-						end
 					end
 					1: begin
-						state <= s_wait;
+						dev_cs <= 0;
+						state <= s_busy;
 						time_enable <= 0;
 					end
 				endcase
 				
-			s_wait:
-				if (dev_rdy[dev_no_s]) begin
-					if ((dev_no_s == 1) && (dev_op_rst_s == 0)) begin
-						state <= s_out_adc;
+			s_busy:
+				if (dev_rdy[dev_no]) begin
+					if (dev_no == 7) begin
+						state <= s_read2;
+						time_enable <= 1;
+					end else if ((dev_no == 1) && (dev_rst == 0)) begin
+						state <= s_read;
 						time_enable <= 1;
 					end else begin
-						state <= s_next;
+						state <= s_wait;
 					end
 				end else begin
-					state <= s_wait;
+					state <= s_busy;
 				end
 				
-			s_out_adc:
+			s_read:
 				case (time_count)
 					0: begin
 						data_out <= {2'b0, adc_out};
-						data_out_en <= 1;
+						data_write <= 1;
 					end
 					1: begin
-						state <= s_next;
-						data_out_en <= 0;
+						state <= s_wait;
+						data_write <= 0;
 						time_enable <= 0;
 					end
 				endcase
 				
-			s_out_time:
+			s_read2:
 				case (time_count)
 					0: begin
-						data_out <= time_out[15:0];
-						data_out_en <= 1;
+						data_out <= time_out[47:32];
+						data_write <= 1;
 					end
 					1: data_out <= time_out[31:16];
-					2: data_out <= time_out[47:32];
+					2: data_out <= time_out[15:0];
 					3: begin
-						state <= s_next;
-						data_out_en <= 0;
+						state <= s_wait;
+						data_write <= 0;
 						time_enable <= 0;
 					end
 				endcase

@@ -1,17 +1,16 @@
 import memboard as mb
-from memboard import wait, time, apply, measure, reset, output
+from memboard import board
 import memboard.unit as u
 
+def run(output):
+    mb.reset_all()
+    
+    top_pin = mb.socket('C11')
+    bottom_pin = mb.socket('J11')
 
-def run():
-    top_pin = 29
-    bottom_pin = 84
+    output['time'] = mb.time()
+    output['current'] = mb.measure(pin=bottom_pin, drive_pin=top_pin, v=2 *u.V)
 
-    reset('all')
-    apply(pin=1, v=2 *u.V)
-    output['time'] = time()
-    output['current'] = measure(pin=bottom_pin, drive_pin=top_pin, v=1 *u.V)
-
-
-with mb.connect('./verilog/src/top.bit'):
-    mb.execute(run, every=200 *u.us, total=5 *u.s, filename='test')
+board.open()
+mb.execute(run, every=1 *u.ms, total=10 *u.s, out='test')
+board.close()

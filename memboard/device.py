@@ -40,7 +40,7 @@ def debug(enable):
     global __debug
     __debug = enable
 
-def try_to(code, throw=True):
+def _try(code, throw=True):
     if code>=0:
         return code
     elif not code in error_codes:
@@ -49,18 +49,18 @@ def try_to(code, throw=True):
     global __debug
     if __debug:
         try:
-            if (try_to.last == code):
-                try_to.count += 1
+            if (_try.last == code):
+                _try.count += 1
             else:
-                if try_to.count>0:
-                    __module_logger.error(f'{error_codes[try_to.last]} <folded {try_to.count} repeating errors>.')
+                if _try.count>0:
+                    __module_logger.error(f'{error_codes[_try.last]} <folded {_try.count} repeating errors>.')
                 __module_logger.error(error_codes[code])
-                try_to.last = code
-                try_to.count = 0
+                _try.last = code
+                _try.count = 0
         except AttributeError:
             __module_logger.error(error_codes[code])
-            try_to.last = code
-            try_to.count = 0
+            _try.last = code
+            _try.count = 0
     else:
         if throw:
             raise RuntimeError(error_codes[code])
@@ -68,14 +68,14 @@ def try_to(code, throw=True):
             __module_logger.error(error_codes[code])
 
 def open():
-    try_to(__device.GetDeviceCount())
-    try_to(__device.OpenBySerial(''))
+    _try(__device.GetDeviceCount())
+    _try(__device.OpenBySerial(''))
 
 def load(path):
     if os.path.isfile(path):
-        try_to(__device.ConfigureFPGA(path))
+        _try(__device.ConfigureFPGA(path))
     else:
-        try_to(-101)
+        _try(-101)
 
 def close():
     __device.Close()
@@ -83,13 +83,13 @@ def close():
 from . import unit as u
 
 def pipe_in(addr, data):
-    try_to(__device.WriteToPipeIn(addr, data))
+    _try(__device.WriteToPipeIn(addr, data))
 
 def pipe_out(addr, data):
-    try_to(__device.ReadFromPipeOut(addr, data))
+    _try(__device.ReadFromPipeOut(addr, data))
 
 def trigger_in(addr, index):
-    try_to(__device.ActivateTriggerIn(addr, index))
+    _try(__device.ActivateTriggerIn(addr, index))
 
 def wait_trigger_out(addr, index, time_out=1):
     triggered = False
@@ -97,17 +97,23 @@ def wait_trigger_out(addr, index, time_out=1):
 
     while not triggered:
         if (time.time()-start_time > time_out):
-            try_to(-102, throw=False)
+            _try(-102, throw=False)
             return False
-        try_to(__device.UpdateTriggerOuts())
-        triggered = try_to(__device.IsTriggered(addr, index))
+        _try(__device.UpdateTriggerOuts())
+        triggered = _try(__device.IsTriggered(addr, index))
 
     return True
 
 def wire_in(addr, value):
-    try_to(__device.SetWireInValue(addr, value))
-    try_to(__device.UpdateWireIns())
+    _try(__device.SetWireInValue(addr, value))
+    _try(__device.UpdateWireIns())
+
+def update_wire_out():
+    _try(__device.UpdateWireOuts())
+
+def read_wire_out(addr):
+    return _try(__device.GetWireOutValue(addr))
 
 def wire_out(addr):
-    try_to(__device.UpdateWireOuts(addr))
-    return try_to(__device.GetWireOutValue(addr))
+    _try(__device.UpdateWireOuts())
+    return _try(__device.GetWireOutValue(addr))
