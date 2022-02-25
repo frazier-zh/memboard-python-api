@@ -38,8 +38,8 @@ module dac_interface_ad5725(
 
 // Arguments
 wire en, rst;
-assign rst = cs ? op[0] : 0;
-assign en = cs ? op[1] : 0;
+assign rst = cs & op[0];
+assign en = cs & op[1];
 
 reg [1:0] channel = 0;
 reg [11:0] data_buffer = 0;
@@ -66,13 +66,6 @@ localparam
 always @(posedge clk) begin
 	if (rst) begin
 		state <= s_reset;
-		CS <= 1;
-		RW <= 1;
-		LDAC <= 1;
-		CLR <= 1;
-		rdy <= 0;
-		time_count <= 8'b0;
-		time_enable <= 0;
 	end else begin
 		if (time_enable) begin
 			time_count <= time_count + 1;
@@ -84,8 +77,14 @@ always @(posedge clk) begin
 			s_reset:
 				if (~rst) begin
 					state <= s_clear;
-					CLR <= 0;
+					time_count <= 0;
 					time_enable <= 1;
+					rdy <= 0;
+					
+					CS <= 1;
+					RW <= 1;
+					LDAC <= 1;
+					CLR <= 0;
 				end else begin
 					state <= s_reset;
 				end
@@ -93,18 +92,19 @@ always @(posedge clk) begin
 			s_clear:
 				if (time_count == t_clear) begin
 					state <= s_idle;
-					CLR <= 1;
-					rdy <= 1;
 					time_enable <= 0;
+					rdy <= 1;
+					
+					CLR <= 1;
 				end else begin
 					state <= s_clear;
 				end
 				
 			s_idle:
-				if (en == 1) begin
+				if (en) begin
 					state <= s_start;
-					rdy <= 0;
 					time_enable <= 1;
+					rdy <= 0;
 				end else begin
 					state <= s_idle;
 				end
@@ -121,10 +121,11 @@ always @(posedge clk) begin
 					3: CS <= 1;
 					4: begin
 						state <= s_idle;
+						time_enable <= 0;
+						rdy <= 1;
+						
 						RW <= 1;
 						LDAC <= 1;
-						rdy <= 1;
-						time_enable <= 0;
 					end
 				endcase
 		endcase

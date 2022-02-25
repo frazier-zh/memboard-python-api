@@ -40,8 +40,8 @@ module switch_interface_group(
 );
 
 wire en, rst;
-assign rst = cs ? op[0] : 0;
-assign en = cs ? op[1] : 0;
+assign rst = cs & op[0];
+assign en = cs & op[1];
 
 reg sw_no = 0;
 
@@ -71,7 +71,6 @@ assign {CS_SW2, CS_SW1} = sw_cs;
 localparam
 	s_reset = 1,
 	s_clear = 4,
-	s_wait =	3,
 	s_idle =	0,
 	s_start = 2;
 reg [7:0] time_count = 0;
@@ -79,18 +78,11 @@ reg time_enable = 0;
 
 // FSM logic
 localparam
-	t_reset = 6,
-	t_delay = 1;
+	t_reset = 6;
 
 always @(posedge clk) begin
 	if (rst) begin
 		state <= s_reset;
-		sw_rst <= 0;
-		sw_cs <= 0;
-		STROBE <= 0;
-		rdy <= 0;
-		time_count <= 0;
-		time_enable <= 0;
 	end else begin
 		if (time_enable) begin
 			time_count <= time_count + 1;
@@ -101,33 +93,31 @@ always @(posedge clk) begin
 		case (state)
 			s_reset: begin
 				state <= s_clear;
-				sw_rst[sw_no] <= 1;
+				time_count <= 0;
 				time_enable <= 1;
+				rdy <= 0;
+				
+				sw_rst <= 1;
+				sw_cs <= 0;
+				STROBE <= 0;
 			end
 				
 			s_clear:
 				if (time_count == t_reset) begin
-					state <= s_wait;
+					state <= s_idle;
+					time_enable <= 0;
+					rdy <= 1;
+					
 					sw_rst <= 0;
-					time_count <= 0;
 				end else begin
 					state <= s_clear;
 				end
 				
-			s_wait:
-				if (time_count == t_delay) begin
-					state <= s_idle;
-					rdy <= 1;
-					time_enable <= 0;
-				end else begin
-					state <= s_wait;
-				end
-				
 			s_idle:
-				if (en == 1) begin
+				if (en) begin
 					state <= s_start;
-					rdy <= 0;
 					time_enable <= 1;
+					rdy <= 0;
 				end else begin
 					state <= s_idle;
 				end
@@ -135,18 +125,20 @@ always @(posedge clk) begin
 			s_start:
 				case (time_count)
 					0: begin
-							sw_cs[sw_no] <= 1;
-							AX <= AX;
-							AY <= AY;
-							DATA <= DATA;
-						end
+						sw_cs[sw_no] <= 1;
+						AX <= AX;
+						AY <= AY;
+						DATA <= DATA;
+					end
 					2: STROBE <= 1;
 					5: STROBE <= 0;
 					7: begin
-							state <= s_wait;
-							time_count <= 0;
-							sw_cs <= 0;
-						end
+						state <= s_idle;
+						time_enable <= 0;
+						rdy <= 1;
+						
+						sw_cs <= 0;
+					end
 				endcase
 		endcase
 	end

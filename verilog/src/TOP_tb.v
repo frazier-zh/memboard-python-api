@@ -133,7 +133,7 @@ module top_tb;
 	
 	// ADC Behaviour
 	always @(negedge CNVST_ADC) begin
-		#40 BUSY_ADC = 1;
+		#60 BUSY_ADC = 1;
 		#720 BUSY_ADC = 0;
 	end
 	
