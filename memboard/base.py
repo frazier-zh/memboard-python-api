@@ -1,86 +1,13 @@
 import numpy as np
 import logging
-from functools import wraps
 
 import time
 from . import unit as u
-from . import device
-from .const import dev, state
 
 import csv
 import copy
 
 __module_logger = logging.getLogger(__name__)
-
-""" Board Class
-    Integrated operations for board communication
-"""
-class board:
-    # Initialize device
-    def open():
-        device.open()
-        device.load('./verilog/src/top.bit')
-
-    def close():
-        device.close()
-
-    def reset():
-        device.trigger_in(0x40, 0) # Reset logic block
-        device.trigger_in(0x40, 1) # Reset memory block
-        device.trigger_in(0x40, 2) # Reset fifo blocks
-
-    def start():
-        device.wire_in(0x00, 0b01)
-
-    def start_auto():
-        device.wire_in(0x00, 0b11) # Enable execution
-
-    def wait_stop(time_out=1):
-        start_time = time.time()
-        while not board.get_state(dev.logic) == state.idle:
-            if (time.time()-start_time > time_out):
-                device.trigger_in(0x40, 0)
-                raise TimeoutError('Time out while waiting on main logic.')
-        board.stop()
-
-    def stop():
-        device.wire_in(0x00, 0b00) # Stop execution
-
-    def set_prog(code):
-        device.pipe_in(0x80, u.to_byte(code)) # Load program
-
-    def set_clock(every):
-        device.pipe_in(0x81, u.to_byte(u.to_tick(every), 6))# Load clock counter
-
-    def get_count():
-        return device.wire_out(0x20) # Check cycle count
-
-    def get_state(target=0):
-        device.update_wire_out()
-        state1 = device.read_wire_out(0x21)
-        state2 = device.read_wire_out(0x22)
-
-        if target==dev.logic:
-            state = u.bit(state2, 3, 0)
-        elif target==dev.adc:
-            state = u.bit(state2, 7, 4)
-        elif target==dev.dac:
-            state = u.bit(state1, 3, 0)
-        elif target==dev.sw_source:
-            state = u.bit(state1, 7, 4)
-        elif target==dev.sw_gate:
-            state = u.bit(state1, 11, 8)
-        elif target==dev.sw_drain:
-            state = u.bit(state1, 15, 12)
-        else:
-            return -1
-
-        return state
-
-    def get_output(size): # Size in 2-bytes (int16)
-        result = bytearray(size*2) # Pipe out container, bytes
-        device.pipe_out(0xA0, result)
-        return u.from_byte(result)
 
 """ Operation basic
 """
@@ -104,39 +31,6 @@ class automode(object):
             return False
         else:
             return True
-
-def allow_auto(size=0):
-    """Decorator allow formalize definition of operations.
-    With output_bytes=0, there is no return value expected from operation.
-
-    The return value are thus labeled by integer placeholder and are updated
-    by its value once the results are ready.
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            code = func(*args, **kwargs)
-
-            global _automode_enabled
-            if _automode_enabled:
-                global _session
-                _session.add(code)
-                return _session.output.assign(size)
-            else:
-                board.set_prog(code)
-                board.start()
-
-                board.wait_stop()
-                if size:
-                    result = board.get_output(size)
-                    value = 0
-                    for i in range(size):
-                        value = (value<<16) + result[0]
-                        del result[0]
-                    return value
-
-        return wrapper
-    return decorator
 
 """Output
     Output class keeps track of all the output registered during runtime.
@@ -175,8 +69,8 @@ class session(object):
     def add(self, other):
         if isinstance(other, np.ndarray):
             if self.code is not None:
-                    self.code = np.concatenate((self.code, other))
-                    self.size += other.shape[0]
+                self.code = np.concatenate((self.code, other))
+                self.size += other.shape[0]
             else:
                 self.code = other
                 self.size = other.shape[0]
@@ -207,7 +101,7 @@ class session(object):
         board.start_auto()
         stop_time = total/u.s
         with open(out+'.dat', 'wb') as file:
-            start_time = time.time()+1
+            start_time = time.time()
             prev_count = 0
             while time.time()-start_time<stop_time:
                 cur_count = board.get_count()
@@ -236,18 +130,18 @@ class session(object):
             with open(out+'.dat', 'rb') as file:
                 data = file.read(read_size)
                 while data:
-                    data_16b = u.from_byte(data)
+                    data_16b = np.frombuffer(data, dtype=np.uint16)
                     values = []
                     for i in range(self.output.index):
-                        value = 0
-                        for j in range(self.output.list[i]):
-                            value = (value<<16) + data_16b[0]
-                            data_16b = data_16b[1:]
-                        
                         if self.output.list[i] == 1:
-                            values.append(u.to_current(value))
+                            values.append(u.to_current(data_16b[0]))
+                            data_16b = data_16b[1:]
                         elif self.output.list[i] == 3:
-                            values.append(value *float(10*u.ns/u.ms))
+                            value = data_16b[2] *1e-5
+                            value += data_16b[1] *0.65535
+                            value += data_16b[0] *42949.67296
+                            values.append(value)
+                            data_16b = data_16b[3:]
 
                     for key in self.output.keys():
                         temp_dict[key] = values[self.output[key]]
