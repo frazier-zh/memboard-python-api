@@ -1,3 +1,3 @@
 from .base import *
-from .operation import *
+from .board import *
 from .const import *

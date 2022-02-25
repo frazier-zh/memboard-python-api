@@ -9,8 +9,8 @@ def run(output):
     bottom_pin = mb.socket('J11')
 
     output['time'] = mb.time()
-    output['current'] = mb.measure(pin=bottom_pin, drive_pin=top_pin, v=2 *u.V)
+    output['current'] = mb.measure(pin=bottom_pin, drive_pin=top_pin, v=0.2 *u.V)
 
 board.open()
-mb.execute(run, every=1 *u.ms, total=10 *u.s, out='test')
+mb.execute(run, every=1 *u.ms, total=1 *u.s, out='test')
 board.close()
