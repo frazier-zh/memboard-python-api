@@ -81,13 +81,22 @@ def to_time(tick):
 def bit(value: int, l, r):
     return (value%(1<<l+1))>>r
 
-def to_int(voltage):
-    return int((voltage+5)/10*0xFFF)
+def to_value(voltage):
+    return int((voltage+5)/10*0x1000)
 
-def to_current(value):
-    sign = value & 0x2000 # negative
+def to_voltage(value):
+    return (value/0x1000)*10-5
+
+def to_current(data_16b):
+    sign = data_16b & 0x2000 # negative
     if sign:
-        value = 0x3FFF-value+1
+        data_16b = 0x3FFF-data_16b+1
 
-    voltage = (value/0x2000) * 5
+    voltage = (data_16b/0x2000) * 5
     return (-1 if sign else 1) * voltage / 200e3
+
+def to_time(data_16b):
+    value = data_16b[2] *1e-5
+    value += data_16b[1] *0.65535
+    value += data_16b[0] *42949.67296
+    return value

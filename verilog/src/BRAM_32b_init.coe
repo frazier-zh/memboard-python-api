@@ -1,0 +1,31 @@
+; Initialization file for a 32-bit wide by 4k deep RAM
+; First entries for peripheral reset
+memory_initialization_radix = 16;
+memory_initialization_vector = 
+00000120,
+00000121,
+00000122,
+00001001,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000,
+00000000;
+
+; Test memory example
+; 00000007, reset clock
+; 11000222, switch connect no=0 x=0 y=1
+; 110D5222, switch connect no=5 x=D y=1
+; 0A000221, dac channel 0 0xA00
+; 09002221, dac channel 2 0x900
+; 00138805, wait 5000 us
+; 00003220, adc channel 0&1
+; 00000122, reset switch
+; 00000A06; loop 10 times
