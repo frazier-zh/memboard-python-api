@@ -1,8 +1,9 @@
 import numpy as np
-import logging
+import warnings
 from functools import wraps
 
 import time
+
 from . import unit as u
 from . import device
 from .const import dev, state
@@ -10,7 +11,6 @@ from .const import dev, state
 import csv
 import copy
 
-__module_logger = logging.getLogger(__name__)
 
 """ Board Class
     Integrated operations for board communication
@@ -80,7 +80,7 @@ class board:
     def get_output(size): # Size in 2-bytes (int16)
         result = bytearray(size*2) # Pipe out container, bytes
         device.pipe_out(0xA0, result)
-        return u.from_byte(result)
+        return result
 
 """ Operation basic
 """
@@ -127,13 +127,13 @@ def allow_auto(size=0):
                 board.start()
 
                 board.wait_stop()
-                if size:
-                    result = board.get_output(size)
-                    value = 0
-                    for i in range(size):
-                        value = (value<<16) + result[0]
-                        del result[0]
-                    return value
+                result = u.from_byte(board.get_output(size))
+                if size == 1:
+                    return u.to_current(result)
+                elif size == 3:
+                    return u.to_time(result)
+                elif size == 10:
+                    time.sleep(0.001)
 
         return wrapper
     return decorator
@@ -192,12 +192,11 @@ class session(object):
 
     def execute(self, out, every=0, total=0):
         if 1.5*self.run_time > every:
-            __module_logger.warn(f'Execution may takes longer than the given interval {u.to_pretty(self.run_time)} > {u.to_pretty(self.every)}.')
+            warnings.warn(f'Execution may takes longer than the given interval {u.to_pretty(self.run_time)} > {u.to_pretty(self.every)}.')
             every = 1.5*self.run_time
-            __module_logger.warn(f'Execution interval is set to {u.to_pretty(every)}.')
+            warnings.warn(f'Execution interval is set to {u.to_pretty(every)}.')
 
         self.print_info()
-        print(f'Execute every {u.to_pretty(every)}, total {u.to_pretty(total)}.')
 
         # Start execution
         board.reset()
@@ -207,7 +206,7 @@ class session(object):
         board.start_auto()
         stop_time = total/u.s
         with open(out+'.dat', 'wb') as file:
-            start_time = time.time()+1
+            start_time = time.time()
             prev_count = 0
             while time.time()-start_time<stop_time:
                 cur_count = board.get_count()
@@ -236,18 +235,15 @@ class session(object):
             with open(out+'.dat', 'rb') as file:
                 data = file.read(read_size)
                 while data:
-                    data_16b = u.from_byte(data)
+                    data_16b = np.frombuffer(data, dtype=np.uint16)
                     values = []
-                    for i in range(self.output.index):
-                        value = 0
-                        for j in range(self.output.list[i]):
-                            value = (value<<16) + data_16b[0]
-                            data_16b = data_16b[1:]
-                        
+                    for i in range(self.output.index):                
                         if self.output.list[i] == 1:
-                            values.append(u.to_current(value))
+                            values.append(u.to_current(data_16b[:1]))
+                            data_16b = data_16b[1:]
                         elif self.output.list[i] == 3:
-                            values.append(value *float(10*u.ns/u.ms))
+                            values.append(u.to_time(data_16b[:3]))
+                            data_16b = data_16b[3:]
 
                     for key in self.output.keys():
                         temp_dict[key] = values[self.output[key]]
@@ -285,3 +281,27 @@ def execute(func, out='tmp', every=0, total=0):
     se.compile(func)
     se.execute(out=out, every=every, total=total)
     se.convert(out=out)
+
+def execute_debug(func, out='tmp', every=0, total=0):
+    csvfile = open(out+'.csv', 'w', newline='')
+    writer = None
+    result = {}
+
+    every_s = every/u.s
+    total_s = total/u.s
+    start_time = time.time()
+    last_time = start_time
+    while True:
+        current_time = time.time()
+        if current_time-start_time>total_s:
+            break
+        if current_time-last_time>every_s:
+            last_time = current_time
+            func(result)
+
+            if writer is None:
+                writer = csv.DictWriter(csvfile, fieldnames=result.keys())
+                writer.writeheader()
+                writer.writerow(result)
+            else:
+                writer.writerow(result)

@@ -61,7 +61,7 @@ def dac(channel=0, value=0x800):
 
     return to_code([dev.dac, op.enable, channel, value])
 
-@allow_auto()
+@allow_auto(size=10)
 def wait(time):
     """Ask FPGA to wait for a precise time period
     """
@@ -84,7 +84,7 @@ def to_switch_group(pin):
     return group, pin_in_group
 
 @allow_auto()
-def switch(pin=0, y=0, on=False):
+def switch(pin=0, y=0, on=True):
     """Switch control
     """
     if y not in range(3):
@@ -147,11 +147,11 @@ def apply(pin, v=None):
     
     # Just connect to DAC if voltage is not given
     if v is not None:
-        dac(channel=channel, value=u.to_int(v))
+        dac(channel=channel, value=u.to_value(v))
     else:
         __module_logger.warn(f'Pin {pin} is connected to DAC-{channel} by default.')
 
-def measure(pin, drive_pin=None, v=None):
+def measure(pin, drive_pin=None, v=None, width=1*u.us):
     group, _ = to_switch_group(pin)
     channel = switch_connection[group][2]
 
@@ -160,11 +160,12 @@ def measure(pin, drive_pin=None, v=None):
     if drive_pin is not None:
         apply(drive_pin, v)
 
-    wait(2 *u.us)
+    wait(width)
     ret = adc(channel=channel)
 
     # Turn off DAC/ADC connections
     if drive_pin is not None:
+        apply(drive_pin, 0)
         switch(pin=drive_pin, y=1, on=False)
     switch(pin=pin, y=2, on=False)
 

@@ -69,10 +69,7 @@ def to_byte(value, nbyte=4):
     return ok_barray
 
 def from_byte(ok_barray):
-    ord_barray = bytearray(len(ok_barray))
-    ord_barray[::2] = ok_barray[1::2]
-    ord_barray[1::2] = ok_barray[::2]
-    return np.frombuffer(ord_barray, dtype=np.uint16)
+    return np.frombuffer(ok_barray, dtype=np.uint16)
 
 # Time conversion
 def to_tick(time):
@@ -110,12 +107,23 @@ def get_runtime(ops):
         return (_op_runtime[op_byte]+_op_runtime[0]) *ns
 
 # Voltage integer conversion
+def to_value(voltage):
+    return int((voltage+5)/10*0x1000)
+
 def to_voltage(value):
-    return value/0xFFF*24-12
+    return (value/0x1000)*10-5
 
-def to_int(voltage):
-    return int((voltage+12)/24*0xFFF)
+def to_current(data_16b):
+    data_16b = data_16b[0]
+    sign = data_16b & 0x2000 # negative
+    if sign:
+        data_16b = 0x3FFF-data_16b+1
 
-def to_current(value):
-    voltage = to_voltage(value)
-    return voltage/200e3
+    voltage = (data_16b/0x2000) * 5
+    return (-1 if sign else 1) * voltage / 200e3
+
+def to_time(data_16b):
+    value = float(data_16b[2]) *1e-5
+    value += float(data_16b[1]) *0.65535
+    value += float(data_16b[0]) *42949.67296
+    return value
