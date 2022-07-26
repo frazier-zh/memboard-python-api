@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from functools import wraps
 
-from .test import Procedure
 from . import device
 from . import const
 from .const import OP, Port, State
@@ -150,19 +149,6 @@ class Board:
 
     async def update(self, q: asyncio.Queue):
         pass
-
-    # def read_state(self):
-    #     state_readout = device.read_wire_out(0x21)
-
-    #     self.state[OP.logic] = unit.bit(state_readout, 3, 0)
-    #     self.state[OP.adc] = unit.bit(state_readout, 7, 4)
-    #     self.state[OP.dac] = unit.bit(state_readout, 11, 8)
-    #     self.state[OP.switch] = unit.bit(state_readout, 15, 12)
-
-    # def read_output(self, size): # Size in 2-bytes (int16)
-    #     result = bytearray(size*2) # Pipe out container, bytes
-    #     device.pipe_out(0xA0, result)
-    #     return result
 
     # Main execution
     async def _execute(self, test: Procedure):
