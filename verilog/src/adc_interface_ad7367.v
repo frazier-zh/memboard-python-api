@@ -26,29 +26,19 @@ module adc_interface_ad7367(
 	input DOUTA,
 	input DOUTB,
 	
-	input clk,
-	input cs,
+	input clk0,
+	input clk1,
+	input rst,
+	input en,
 	output reg rdy,
-	output reg [3:0] state,
+	output reg [27:0] dout,
 	
-	input [3:0] op,
-	input [7:0] addr,
-	output [13:0] data_out
+	output reg [3:0] state
 	);
 
 // Arguments
-wire en, rst;
-assign rst = cs ? op[0] : 0;
-assign en = cs ? op[1] : 0;
-
-reg channel = 0;
 reg [13:0] out_a = 0, out_b = 0;
-assign data_out = ~channel ? out_a : out_b;
-
-always @(posedge clk)
-	if (cs == 1) begin
-		channel <= addr[0];
-	end
+assign dout = {out_a, out_b};
 
 // FSM basic
 localparam
@@ -66,8 +56,18 @@ localparam
 	t2 = 4,
 	t_quiet = 3,
 	nbit = 14;
+	
+always @(negedge clk1) begin
+	if (~CS) begin
+		data_count <= data_count + 1;
+		out_a <= {out_a[12:0], DOUTA};
+		out_b <= {out_b[12:0], DOUTB};
+	end else begin
+		data_count <= 0;
+	end
+end
 
-always @(posedge clk) begin
+always @(posedge clk0 or posedge rst) begin
 	if (rst) begin
 		state <= s_idle;
 		CS <= 1;
@@ -80,26 +80,6 @@ always @(posedge clk) begin
 			time_count <= time_count + 1;
 		end else begin
 			time_count <= 0;
-		end
-		
-		// SCLK and ADC DOUT read
-		if (~CS) begin
-			case (time_count)
-				0: begin
-					SCLK <= 1;
-				end
-				2: begin
-					SCLK <= 0;
-					
-					data_count <= data_count + 1;
-					out_a <= {out_a[12:0], DOUTA};
-					out_b <= {out_b[12:0], DOUTB};
-				end
-				3: time_count <= 0;
-			endcase
-		end else begin
-			data_count <= 0;
-			SCLK <= 1;
 		end
 	
 		// FSM
@@ -130,14 +110,14 @@ always @(posedge clk) begin
 				end else begin
 					state <= s_read;
 					CS <= 0;
-					time_count <= 0;
+					time_enable <= 0;
 				end
 				
 			s_read:
 				if (data_count == nbit) begin
 					state <= s_wait;
 					CS <= 1;
-					time_count <= 0;
+					time_enable <= 1;
 				end else begin
 					state <= s_read;
 				end

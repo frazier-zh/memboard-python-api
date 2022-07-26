@@ -43,15 +43,16 @@ module TOP(
 	output [2:0] AY_SW6,
 	output STROBE_SW6,
 	output DATA_SW6,
-	input CLK,
 	output SCLK_ADC,
-   output CNVST_ADC,
-   output CS_ADC,
-   input BUSY_ADC,
-   output reg ADDR_ADC=0,
-   input DOUTA_ADC,
+    output CNVST_ADC,
+    output CS_ADC,
+    input BUSY_ADC,
+    output reg ADDR_ADC=0,
+    input DOUTA_ADC,
 	input DOUTB_ADC,
 	
+    input CLK0,
+    input CLK1,
 	output [7:0] LED,
 	
 	//OkHostInterface
@@ -81,188 +82,331 @@ okHost okHI(
 okWireOR #(.N(6)) wireOR (.ok2(ok2), .ok2s(ok2x));
 
 // Status and control signal
-wire clock_rst, fifo_rst, mem_rst, logic_rst, logic_en, logic_auto;
-wire [15:0] logic_count, dev_state1, dev_state2;
+wire [15:0]     trigger;
+wire            fifo_in_rst;
+wire            fifo_out_rst;
+wire            if_main_rst;
 
-wire [15:0] trig_in, wire_in;
-
-assign {fifo_rst, mem_rst, logic_rst} = trig_in[2:0];
-assign {logic_auto, logic_en} = wire_in[1:0];
-
-okWireIn okWireIn00(.ok1(ok1),.ep_addr(8'h00),.ep_dataout(wire_in));
-okWireOut okWireOut20(.ok1(ok1),.ok2(ok2x[3*17 +: 17]),.ep_addr(8'h20),.ep_datain(logic_count));
-okWireOut okWireOut21(.ok1(ok1),.ok2(ok2x[4*17 +: 17]),.ep_addr(8'h21),.ep_datain(dev_state1));
-okWireOut okWireOut22(.ok1(ok1),.ok2(ok2x[5*17 +: 17]),.ep_addr(8'h22),.ep_datain(dev_state2));
-okTriggerIn okTriggerIn40(.ok1(ok1),.ep_addr(8'h40),.ep_clk(CLK),.ep_trigger(trig_in));
+assign fifo_in_rst  = trigger[0];
+assign fifo_out_rst = trigger[0];
+assign if_main_rst  = trigger[1];
 
 // Memory interface
-wire data32_in_empty;
-wire data16_write, data16_read;
-wire data_read, data_write;
-wire [15:0] data16_in, data16_out, data_out;
-wire [31:0] data32_in, mem_in, main_bus;
+wire            pipe80_write;
+wire [15:0]     pipe80_dataout;
 
-okPipeIn okPipeIn80(
-	.ok1(ok1),
-	.ok2(ok2x[0*17 +: 17]),
-	.ep_addr(8'h80),
-	.ep_write(data16_write),
-	.ep_dataout(data16_in)
-);
+wire            pipeA0_read;
+wire [15:0]     pipeA0_datain;
 
-FIFO_16b_32b_64 fifo_data_in(
-	.rst(fifo_rst),
-	.wr_clk(ti_clk),
-	.rd_clk(CLK),
-	.din(data16_in),
-	.wr_en(data16_write),
-	.rd_en(data_read),
-	.dout(data32_in),
-	.full(),
-	.empty(data32_in_empty)
-);
+wire            fifo_in_rd_en;
+wire [31:0]     fifo_in_dout;
+wire            fifo_in_empty;
 
-okPipeOut okPipeOutA0(
-	.ok1(ok1),
-	.ok2(ok2x[1*17 +: 17]),
-	.ep_addr(8'hA0),
-	.ep_read(data16_read),
-	.ep_datain(data16_out)
-);
+wire [63:0]     fifo_out_din;
+wire            fifo_out_wr_en;
+wire [15:0]     fifo_out_rd_data_count;
 
-FIFO_16b_16b_1k fifo_data_out(
-	.rst(fifo_rst),
-	.wr_clk(CLK),
-	.rd_clk(ti_clk),
-	.din(data_out),
-	.wr_en(data_write),
-	.rd_en(data16_read),
-	.dout(data16_out),
-	.full(),
-	.empty()
-);
+wire [27:0]     mux_data;
+wire            mux_en;
+wire            mux_idle;
 
-wire mem_read, mem_zero, mem_valid;
-memory_control mem_ctrl(
-	.clk(CLK),
-	.din_empty(data32_in_empty),
-	.din_read(data_read),
-	.din(data32_in),
-	.dout_read(mem_read),
-	.dout(mem_in),
-	.rst(mem_rst),
-	.zero(mem_zero),
-	.valid(mem_valid)
-);
+okPipeIn okPipeIn80
+    (
+        .ok1(ok1),
+        .ok2(ok2x[0*17 +: 17]),
+        .ep_addr(8'h80),
+        .ep_write(pipe80_write),
+        .ep_dataout(pipe80_dataout)
+    );
 
-// Clock interface
+FIFO_16B16k_32B fifo_in
+    (
+        .rst(fifo_in_rst),
+        .wr_clk(ti_clk),
+        .rd_clk(CLK),
+        .din(pipe80_dataout),
+        .wr_en(pipe80_write),
+        .rd_en(fifo_in_rd_en),
+        .dout(fifo_in_dout),
+        .full(),
+        .empty(fifo_in_empty)
+    );
 
-wire time16_write;
-wire [15:0] time16_in;
-wire [47:0] time_out;
+okPipeOut okPipeOutA0
+    (
+        .ok1(ok1),
+        .ok2(ok2x[1*17 +: 17]),
+        .ep_addr(8'hA0),
+        .ep_read(pipeA0_read),
+        .ep_datain(pipeA0_datain)
+    );
 
-okPipeIn okPipeIn81(
-	.ok1(ok1),
-	.ok2(ok2x[2*17 +: 17]),
-	.ep_addr(8'h81),
-	.ep_write(time16_write),
-	.ep_dataout(time16_in)
-);
+FIFO_64B16k_16B fifo_out
+    (
+        .rst(fifo_out_rst),
+        .wr_clk(CLK),
+        .rd_clk(ti_clk),
+        .din(fifo_out_din),
+        .wr_en(fifo_out_wr_en),
+        .rd_en(pipeA0_read),
+        .dout(pipeA0_datain),
+        .full(),
+        .empty(),
+        .rd_data_count(fifo_out_rd_data_count)
+    );
 
-wire cd_en, cd_rdy, clock_clr;
-multiclock_interface clock(
-	.clk(CLK),
-	.ti_clk(ti_clk),
-	.data_write(time16_write),
-	.data_in(time16_in),
-	.en(cd_en),
-	.rdy(cd_rdy),
-	.clr(clock_clr),
-	.data_out(time_out)
-);
-
-// Main logic interface
-wire [7:0] dev_cs;
-wire [7:0] dev_rdy;
-wire [13:0] adc_out;
-
-assign dev_rdy[0] = 1, dev_rdy[7] = 1;
-assign LED[7:0] = {dev_rdy};
-
-wire [3:0] logic_state;
-logic_control logic_ctrl(
-	.clk(CLK),
-	.rst(logic_rst),
-	.state(logic_state),
-	.en(logic_en),
-	.auto_en(logic_auto),
-	.auto_count(logic_count),
-	.mem_read(mem_read),
-	.mem_zero(mem_zero),
-	.mem_valid(mem_valid),
-	.mem_in(mem_in),
-	.main_bus(main_bus),
-	.dev_cs(dev_cs),
-	.dev_rdy(dev_rdy),
-	.data_write(data_write),
-	.data_out(data_out),
-	.adc_out(adc_out),
-	.time_out(time_out),
-	.cd_en(cd_en),
-	.cd_rdy(cd_rdy),
-	.clock_clr(clock_clr)
-);
+okTriggerIn okTriggerIn40
+    (
+        .ok1(ok1),
+        .ep_addr(8'h40),
+        .ep_clk(CLK),
+        .ep_trigger(trigger)
+    );
+    
+okWireOut okWireOut20
+    (
+        .ok1(ok1),
+        .ok2(ok2x[2*17 +: 17]),
+        .ep_addr(8'h20),
+        .ep_datain(fifo_out_rd_data_count),
+    );
+    
+IF if_main
+    (
+        .fpga_clk_i(CLK),
+        .reset_n_i(),
+        
+        .fifo_empty_n_i(fifo_in_empty),
+        .fifo_data_i(fifo_in_dout),
+        .fifo_rd_o(fifo_in_rd_en),
+        
+        .mux_data_o(mux_data),
+        .mux_en_o(mux_en),
+        .mux_idle_i(mux_idle)
+    );
 
 // Device definitions
-wire [3:0] dev_bus;
-wire [3:0] op_bus;
-wire [7:0] addr_bus;
-wire [15:0] data_bus;
-assign {data_bus, addr_bus, op_bus, dev_bus} = main_bus;
+parameter real      n_adc   = 1;
+parameter real      n_dac   = 1;
+parameter real      n_sw    = 6;
+// ADC
+wire [n_adc - 1:0]  ADC_EN;
+wire [n_adc - 1:0]  ADC_RESET;
+wire [n_adc - 1:0]  ADC_IDLE;
+wire                ADC_READ_MODE;
+wire [n_adc - 1:0]  ADC_DATA_READY;
+wire [n_adc*32-1:0] ADC_DATA;
 
-wire [3:0] adc_state;
-adc_interface_ad7367 adc(
-	.BUSY(BUSY_ADC), .SCLK(SCLK_ADC), .CNVST(CNVST_ADC), .CS(CS_ADC), .DOUTA(DOUTA_ADC), .DOUTB(DOUTB_ADC),
-	.clk(CLK), .cs(dev_cs[1]), .rdy(dev_rdy[1]), .state(adc_state), .op(op_bus), .addr(addr_bus), .data_out(adc_out)
-);
+// DAC
+wire [n_dac - 1:0]  DAC_EN;
+wire [n_dac - 1:0]  DAC_RESET;
+wire [n_dac - 1:0]  DAC_IDLE;
+wire                DAC_CLEAR;
+wire [11:0]         DAC_DATA;
+wire [1:0]          DAC_ADDR;
 
-wire [3:0] dac_state;
-dac_interface_ad5725 dac(
-	.AD(AD_DAC), .DB(DB_DAC), .RW(RW_DAC), .LDAC(LDAC_DAC), .CS(CS_DAC), .CLR(CLR_DAC),
-	.clk(CLK), .cs(dev_cs[2]), .rdy(dev_rdy[2]), .state(dac_state), .op(op_bus), .addr(addr_bus), .data_in(data_bus)
-);
+// SW
+wire [n_sw - 1:0]   SW_EN;
+wire [n_sw - 1:0]   SW_RESET;
+wire [n_sw - 1:0]   SW_IDLE;
+wire                SW_CLEAR;
+wire [3:0]          SW_AX;
+wire [2:0]          SW_AY;
+wire                SW_DATA;
 
-timer_interface timer(
-	.clk(CLK), .cs(dev_cs[3]), .rdy(dev_rdy[3]), .op(op_bus), .data_in({data_bus, addr_bus})
-);
+MUX #(
+        .N_ADC(n_adc),
+        .N_DAC(n_dac),
+        .N_SW(n_sw)
+    )
+    mux0
+    (
+        .fpga_clk_i(CLK0),
+        .timer_clk_i(CLK1),
 
-assign AX_SW2 = AX_SW1, AX_SW4 = AX_SW3, AX_SW6 = AX_SW5;
-assign AY_SW2 = AY_SW1, AY_SW4 = AY_SW3, AY_SW6 = AY_SW5;
-assign STROBE_SW2 = STROBE_SW1, STROBE_SW4 = STROBE_SW3, STROBE_SW6 = STROBE_SW5;
-assign DATA_SW2 = DATA_SW1, DATA_SW4 = DATA_SW3, DATA_SW6 = DATA_SW5;
+        .en_i(mux_en),
+        .device_i(mux_data[27:20]),
+        .data_i(mux_data[19:0]),
+        .idle_o(mux_idle),
+        
+        // FIFO Interface
+        .fifo_wr_o(fifo_out_wr_en),
+        .fifo_data_o(fifo_out_din),
+        
+        // ADC
+        .ADC_EN_OS(ADC_EN),
+        .ADC_RESET_OS(ADC_RESET),
+        .ADC_IDLE_IS(ADC_IDLE),
+        .ADC_READ_MODE_O(ADC_READ_MODE),
+        .ADC_DATA_READY_IS(ADC_DATA_READY),
+        .ADC_DATA_IS(ADC_DATA),
+        
+        // DAC
+        .DAC_EN_OS(DAC_EN),
+        .DAC_RESET_OS(DAC_RESET),
+        .DAC_IDLE_IS(DAC_IDLE),
+        .DAC_CLEAR_O(DAC_CLEAR),
+        .DAC_DATA_O(DAC_DATA),
+        .DAC_ADDR_O(DAC_ADDR),
+        
+        // SW
+        .SW_EN_OS(SW_EN),
+        .SW_RESET_OS(SW_RESET),
+        .SW_IDLE_IS(SW_IDLE),
+        .SW_CLEAR_O(SW_CLEAR),
+        .SW_AX_O(SW_AX),
+        .SW_AY_O(SW_AY),
+        .SW_DATA_O(SW_DATA)
+    );
 
-wire [3:0] sw1_state;
-switch_interface_group switch1(
-	.RESET_SW1(RESET_SW1), .CS_SW1(CS_SW1), .RESET_SW2(RESET_SW2), .CS_SW2(CS_SW2),
-	.clk(CLK), .cs(dev_cs[4]), .rdy(dev_rdy[4]), .state(sw1_state), .op(op_bus), .data_in(data_bus),
-	.AX(AX_SW1), .AY(AY_SW1), .STROBE(STROBE_SW1), .DATA(DATA_SW1)
-);
+AD7367 adc0
+    (
+        .FPGA_CLK_I(CLK0),
+        .EN_I(ADC_EN[0]),
+        .RESET_N_I(ADC_RESET[0]),
+        .READ_MODE_I(ADC_READ_MODE),
+        .IDLE_O(ADC_IDLE[0]),
+        .DATA_READY_O(ADC_DATA_READY[0]),
+        .DATA_O(ADC_DATA[0*32 +: 32]),
+        
+        .DOUTA_I(DOUTA_ADC),
+        .DOUTB_I(DOUTB_ADC),
+        .BUSY_I(BUSY_ADC),
+        .SCLK_O(SCLK_ADC),
+        .CNVST_O(CNVST_ADC),
+        .CS_O(CS_ADC)
+    );
 
-wire [3:0] sw2_state;
-switch_interface_group switch2(
-	.RESET_SW1(RESET_SW3), .CS_SW1(CS_SW3), .RESET_SW2(RESET_SW4), .CS_SW2(CS_SW4),
-	.clk(CLK), .cs(dev_cs[5]), .rdy(dev_rdy[5]), .state(sw2_state), .op(op_bus), .data_in(data_bus),
-	.AX(AX_SW3), .AY(AY_SW3), .STROBE(STROBE_SW3), .DATA(DATA_SW3)
-);
+AD5725 dac0
+    (
+        .FPGA_CLK_I(CLK0),
+        .EN_I(DAC_EN[0]),
+        .RESET_I(DAC_RESET[0]),
+        .CLR_I(DAC_CLEAR),
+        .DATA_I(DAC_DATA),
+        .ADDR_I(DAC_ADDR),
+        .IDLE_O(DAC_IDLE[0]),
+        
+        .AD_O(AD_DAC),
+        .DB_O(DB_DAC),
+        .RW_N_O(RW_DAC),
+        .LDAC_N_O(LDAC_DAC),
+        .CS_N_O(CS_DAC),
+        .CLR_N_O(CLR_DAC)
+    );
 
-wire [3:0] sw3_state;
-switch_interface_group switch3(
-	.RESET_SW1(RESET_SW5), .CS_SW1(CS_SW5), .RESET_SW2(RESET_SW6), .CS_SW2(CS_SW6),
-	.clk(CLK), .cs(dev_cs[6]), .rdy(dev_rdy[6]), .state(sw3_state), .op(op_bus), .data_in(data_bus),
-	.AX(AX_SW5), .AY(AY_SW5), .STROBE(STROBE_SW5), .DATA(DATA_SW5)
-);
+MT8816 sw0
+    (
+        .FPGA_CLK_I(CLK0),
+        .EN_I(SW_EN[0]),
+        .RESET_I(SW_RESET[0]),
+        .CLR_I(SW_CLEAR),
+        .AX_I(SW_AX),
+        .AY_I(SW_AY),
+        .DATA_I(SW_DATA),
+        .IDLE_O(SW_IDLE[0]),
+        
+        .RESET_O(RESET_SW1),
+        .CS_O(CS_SW1),
+        .STROBE_O(STROBE_SW1),
+        .AX_O(AX_SW1),
+        .AY_O(AY_SW1),
+        .DATA_O(DATA_SW1)
+    );
+    
+MT8816 sw1
+    (
+        .FPGA_CLK_I(CLK0),
+        .EN_I(SW_EN[1]),
+        .RESET_I(SW_RESET[1]),
+        .CLR_I(SW_CLEAR),
+        .AX_I(SW_AX),
+        .AY_I(SW_AY),
+        .DATA_I(SW_DATA),
+        .IDLE_O(SW_IDLE[1]),
+        
+        .RESET_O(RESET_SW2),
+        .CS_O(CS_SW2),
+        .STROBE_O(STROBE_SW2),
+        .AX_O(AX_SW2),
+        .AY_O(AY_SW2),
+        .DATA_O(DATA_SW2)
+    );
 
-assign dev_state1 = {sw3_state, sw2_state, sw1_state, dac_state};
-assign dev_state2 = {8'b0, adc_state, logic_state};
+MT8816 sw2
+    (
+        .FPGA_CLK_I(CLK0),
+        .EN_I(SW_EN[2]),
+        .RESET_I(SW_RESET[2]),
+        .CLR_I(SW_CLEAR),
+        .AX_I(SW_AX),
+        .AY_I(SW_AY),
+        .DATA_I(SW_DATA),
+        .IDLE_O(SW_IDLE[2]),
+        
+        .RESET_O(RESET_SW3),
+        .CS_O(CS_SW3),
+        .STROBE_O(STROBE_SW3),
+        .AX_O(AX_SW3),
+        .AY_O(AY_SW3),
+        .DATA_O(DATA_SW3)
+    );
+
+MT8816 sw3
+    (
+        .FPGA_CLK_I(CLK0),
+        .EN_I(SW_EN[3]),
+        .RESET_I(SW_RESET[3]),
+        .CLR_I(SW_CLEAR),
+        .AX_I(SW_AX),
+        .AY_I(SW_AY),
+        .DATA_I(SW_DATA),
+        .IDLE_O(SW_IDLE[3]),
+        
+        .RESET_O(RESET_SW4),
+        .CS_O(CS_SW4),
+        .STROBE_O(STROBE_SW4),
+        .AX_O(AX_SW4),
+        .AY_O(AY_SW4),
+        .DATA_O(DATA_SW4)
+    );
+    
+MT8816 sw4
+    (
+        .FPGA_CLK_I(CLK0),
+        .EN_I(SW_EN[4]),
+        .RESET_I(SW_RESET[4]),
+        .CLR_I(SW_CLEAR),
+        .AX_I(SW_AX),
+        .AY_I(SW_AY),
+        .DATA_I(SW_DATA),
+        .IDLE_O(SW_IDLE[4]),
+        
+        .RESET_O(RESET_SW5),
+        .CS_O(CS_SW5),
+        .STROBE_O(STROBE_SW5),
+        .AX_O(AX_SW5),
+        .AY_O(AY_SW5),
+        .DATA_O(DATA_SW5)
+    );
+    
+MT8816 sw5
+    (
+        .FPGA_CLK_I(CLK0),
+        .EN_I(SW_EN[5]),
+        .RESET_I(SW_RESET[5]),
+        .CLR_I(SW_CLEAR),
+        .AX_I(SW_AX),
+        .AY_I(SW_AY),
+        .DATA_I(SW_DATA),
+        .IDLE_O(SW_IDLE[5]),
+        
+        .RESET_O(RESET_SW6),
+        .CS_O(CS_SW6),
+        .STROBE_O(STROBE_SW6),
+        .AX_O(AX_SW6),
+        .AY_O(AY_SW6),
+        .DATA_O(DATA_SW6)
+    );
 
 endmodule
