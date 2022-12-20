@@ -1,307 +1,103 @@
-import numpy as np
-import warnings
-from functools import wraps
+from dataclasses import dataclass
+from enum import IntEnum
 
-import time
+# Constants
+N_ADC   = 1
+N_DAC   = 1
+N_SW    = 6
 
-from . import unit as u
-from . import device
-from .const import dev, state
+class ADDR(IntEnum):
+    PIPE_IN = 0x80
+    PIPE_OUT = 0xA0
+    FIFO_IN_WR_DATA_COUNT = 0x20
+    FIFO_OUT_RD_DATA_COUNT = 0x21
+    DIRECT_DATA = 0x22
+    STATUS = 0x23
+    TRIGGER_IN = 0x40
+    TRIGGER_OUT = 0x60
 
-import csv
-import copy
+class TRIG(IntEnum):
+    MASTER_RST      = 0
+    FIFO_IN_RST     = 1
+    FIFO_OUT_RST    = 2
+    IF_MAIN_RST     = 3
+    CLOCK_RST       = 4
+    REG_RST         = 5
+    MUX_RST         = 6
 
+class SIGNAL(IntEnum):
+    DIRECT_DATA_READY = 0
 
-""" Board Class
-    Integrated operations for board communication
-"""
-class board:
-    # Initialize device
-    def open():
-        device.open()
-        device.load('./verilog/src/top.bit')
+class STATUS(IntEnum):
+    IF_MAIN_IDLE = 1<<0
+    FIFO_IN_FILL = 1<<1
 
-    def close():
-        device.close()
+class REG(IntEnum):
+    ADC_CLK_DIV     = 0
+    ADC_READ_MODE   = 1
+    ADC_TRIG_MODE   = 2
+    ADC_ADDR        = 3
+    ADC_IDLE        = 4
+    DAC_IDLE        = 5
+    SW_IDLE         = 6
 
-    def reset():
-        device.trigger_in(0x40, 0) # Reset logic block
-        device.trigger_in(0x40, 1) # Reset memory block
-        device.trigger_in(0x40, 2) # Reset fifo blocks
+class DEVICE:
+    ADC_ALL = (1<<7)+(0<<4)
+    ADC     = [((0<<4)+x) for x in range(N_ADC)]
 
-    def start():
-        device.wire_in(0x00, 0b01)
+    DAC_ALL = (1<<7)+(1<<4)
+    DAC     = [((1<<4)+x) for x in range(N_DAC)]
 
-    def start_auto():
-        device.wire_in(0x00, 0b11) # Enable execution
+    SW_ALL  = (1<<7)+(2<<4)
+    SW      = [((2<<4)+x) for x in range(N_SW)]
 
-    def wait_stop(time_out=1):
-        start_time = time.time()
-        while not board.get_state(dev.logic) == state.idle:
-            if (time.time()-start_time > time_out):
-                device.trigger_in(0x40, 0)
-                raise TimeoutError('Time out while waiting on main logic.')
-        board.stop()
+class OPCODE(IntEnum):
+    NULL     = 0
+    SETSR    = 1
+    LDSR     = 2
+    MUX      = 3
+    MUXE     = 4
+    WAIT     = 5
 
-    def stop():
-        device.wire_in(0x00, 0b00) # Stop execution
+class OPT(IntEnum):
+    RESET   = 1<<3
+    CLEAR   = 1<<2
 
-    def set_prog(code):
-        device.pipe_in(0x80, u.to_byte(code)) # Load program
+@dataclass
+class Instruction:
+    opcode  : OPCODE = OPCODE.NULL
+    ireg    : bool = 0
+    data    : int = 0
 
-    def set_clock(every):
-        device.pipe_in(0x81, u.to_byte(u.to_tick(every), 6))# Load clock counter
+    def to_bytes(self) -> bytearray:
+        return bytearray([(self.opcode<<5)+(self.ireg<<4)+(self.data>>8)%(1<<4),\
+            self.data%(1<<8)])
 
-    def get_count():
-        return device.wire_out(0x20) # Check cycle count
+    def __repr__(self) -> str:
+        return '{} IREG{:d} {:x}'.format(self.opcode.name, self.ireg, self.data)
 
-    def get_state(target=0):
-        device.update_wire_out()
-        state1 = device.read_wire_out(0x21)
-        state2 = device.read_wire_out(0x22)
-
-        if target==dev.logic:
-            state = u.bit(state2, 3, 0)
-        elif target==dev.adc:
-            state = u.bit(state2, 7, 4)
-        elif target==dev.dac:
-            state = u.bit(state1, 3, 0)
-        elif target==dev.sw_source:
-            state = u.bit(state1, 7, 4)
-        elif target==dev.sw_gate:
-            state = u.bit(state1, 11, 8)
-        elif target==dev.sw_drain:
-            state = u.bit(state1, 15, 12)
-        else:
-            return -1
-
-        return state
-
-    def get_output(size): # Size in 2-bytes (int16)
-        result = bytearray(size*2) # Pipe out container, bytes
-        device.pipe_out(0xA0, result)
-        return result
-
-""" Operation basic
-"""
-# Operation decorator
-_automode_enabled = False
-class automode(object):
-    def __init__(self, session):
-        self.session = session
-
-    def __enter__(self):
-        global _automode_enabled, _session
-        _automode_enabled = True
-        _session = self.session
-
-    def __exit__(self, exc_type, exc_value, tb):
-        global _automode_enabled, _session
-        _automode_enabled = False
-        del _session
-
-        if exc_type is not None:
-            return False
-        else:
-            return True
-
-def allow_auto(size=0):
-    """Decorator allow formalize definition of operations.
-    With output_bytes=0, there is no return value expected from operation.
-
-    The return value are thus labeled by integer placeholder and are updated
-    by its value once the results are ready.
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            code = func(*args, **kwargs)
-
-            global _automode_enabled
-            if _automode_enabled:
-                global _session
-                _session.add(code)
-                return _session.output.assign(size)
-            else:
-                board.set_prog(code)
-                board.start()
-
-                board.wait_stop()
-                result = u.from_byte(board.get_output(size))
-                if size == 1:
-                    return u.to_current(result)
-                elif size == 3:
-                    return u.to_time(result)
-                elif size == 10:
-                    time.sleep(0.001)
-
-        return wrapper
-    return decorator
-
-"""Output
-    Output class keeps track of all the output registered during runtime.
-"""
-class output(dict):
-    def __init__(self):
-        self.index = 0
+class InstructionList(Instruction):
+    def __init__(self, *args) -> None:
         self.list = []
-        self.size = 0
-
-    def assign(self, size):
-        if (size):
-            self.index += 1
-            self.list.append(size)
-            self.size += size
-            return self.index-1
-
-    def clear(self):
-        self.__dict__.clear()
-        self.list.clear()
-        self.index = 0
-        self.size = 0
-
-"""Session
-    Session class keeps track of all the command registered during runtime.
-"""
-class session(object):
-    def __init__(self):
-        self.code = None
-        self.output = output()
-
-    def clear(self):
-        self.code = None
-        self.output.clear()
-
-    def add(self, other):
-        if isinstance(other, np.ndarray):
-            if self.code is not None:
-                    self.code = np.concatenate((self.code, other))
-                    self.size += other.shape[0]
+        for item in args:
+            if isinstance(item, Instruction):
+                self.list.append(item)
             else:
-                self.code = other
-                self.size = other.shape[0]
+                self.list.append(Instruction(item))
 
-    def compile(self, func):
-        # Run function once
-        with automode(self):
-            func(self.output)
+    def append(self, item):
+        if isinstance(item, Instruction):
+            self.list.append(item)
+        elif isinstance(item, InstructionList):
+            self.list += item.list
 
-        self.run_time = 0
-        for ops in self.code:
-            self.run_time += u.get_runtime(ops)
+    def to_bytes(self) -> bytearray:
+        bytes = bytearray()
+        for instr in self.list:
+            bytes += instr.to_bytes()
+        return bytes
 
-    def execute(self, out, every=0, total=0):
-        if 1.5*self.run_time > every:
-            warnings.warn(f'Execution may takes longer than the given interval {u.to_pretty(self.run_time)} > {u.to_pretty(self.every)}.')
-            every = 1.5*self.run_time
-            warnings.warn(f'Execution interval is set to {u.to_pretty(every)}.')
-
-        self.print_info()
-
-        # Start execution
-        board.reset()
-        board.set_prog(self.code)
-        board.set_clock(every)
-        
-        board.start_auto()
-        stop_time = total/u.s
-        with open(out+'.dat', 'wb') as file:
-            start_time = time.time()
-            prev_count = 0
-            while time.time()-start_time<stop_time:
-                cur_count = board.get_count()
-                if cur_count > prev_count: # Indicate new output
-                    result = board.get_output(self.output.size*(cur_count-prev_count))
-                    file.write(result)
-
-                    prev_count = cur_count
-
-            board.stop()
-            cur_count = board.get_count()
-            if cur_count > prev_count: # Indicate new output
-                result = board.get_output(self.output.size*(cur_count-prev_count))
-                file.write(result)
-        
-    def convert(self, out):
-        # TODO
-        read_size = self.output.size*2
-
-        with open(out+'.csv', 'w', newline='') as csvfile:
-            fieldnames = [str(key) for key in self.output.keys()]
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            writer.writeheader()
-
-            temp_dict = copy.deepcopy(self.output)
-            with open(out+'.dat', 'rb') as file:
-                data = file.read(read_size)
-                while data:
-                    data_16b = np.frombuffer(data, dtype=np.uint16)
-                    values = []
-                    for i in range(self.output.index):                
-                        if self.output.list[i] == 1:
-                            values.append(u.to_current(data_16b[:1]))
-                            data_16b = data_16b[1:]
-                        elif self.output.list[i] == 3:
-                            values.append(u.to_time(data_16b[:3]))
-                            data_16b = data_16b[3:]
-
-                    for key in self.output.keys():
-                        temp_dict[key] = values[self.output[key]]
-
-                    writer.writerow(temp_dict)
-                    data = file.read(read_size)
-
-    def print_info(self):
-        # Print output info
-        print(f"""
-====== Execution Summary ======
-Total commands:   {self.code.size}
-Output size:      {self.output.size*2} bytes
-Execution time:   {u.to_pretty(self.run_time)}
-===============================""")
-
-    def generate_code(self, out, every):
-        """Generate verilog memory file, used in host simulation
-        """
-        with open(out+'.mem1', 'w') as file:
-            mem = u.to_byte(self.code)
-            length = len(mem)
-            for i in range(int(length/4)):
-                file.write('{:02x} {:02x} {:02x} {:02x}\n'\
-                    .format(mem[4*i], mem[4*i+1], mem[4*i+2], mem[4*i+3]))
-
-        with open(out+'.mem2', 'w') as file:
-            mem = u.to_byte(u.to_tick(every), 6)
-            for v in mem:
-                file.write('{:02x} '.format(v))
-
-# Lagacy method, will be discraded
-def execute(func, out='tmp', every=0, total=0):
-    se = session()
-    se.compile(func)
-    se.execute(out=out, every=every, total=total)
-    se.convert(out=out)
-
-def execute_debug(func, out='tmp', every=0, total=0):
-    csvfile = open(out+'.csv', 'w', newline='')
-    writer = None
-    result = {}
-
-    every_s = every/u.s
-    total_s = total/u.s
-    start_time = time.time()
-    last_time = start_time
-    while True:
-        current_time = time.time()
-        if current_time-start_time>total_s:
-            break
-        if current_time-last_time>every_s:
-            last_time = current_time
-            func(result)
-
-            if writer is None:
-                writer = csv.DictWriter(csvfile, fieldnames=result.keys())
-                writer.writeheader()
-                writer.writerow(result)
-            else:
-                writer.writerow(result)
+    def to_txt(self, file):
+        with open(file, 'w') as fout:
+            for item in self.list:
+                fout.write(' '.join('{:02x}'.format(x) for x in item.to_bytes()))
