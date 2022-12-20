@@ -43,7 +43,8 @@ LIBRARY XilinxCoreLib;
 ENTITY BC48 IS
   PORT (
     clk : IN STD_LOGIC;
-    sclr : IN STD_LOGIC;
+    load : IN STD_LOGIC;
+    l : IN STD_LOGIC_VECTOR(47 DOWNTO 0);
     q : OUT STD_LOGIC_VECTOR(47 DOWNTO 0)
   );
 END BC48;
@@ -53,7 +54,8 @@ ARCHITECTURE BC48_a OF BC48 IS
 COMPONENT wrapped_BC48
   PORT (
     clk : IN STD_LOGIC;
-    sclr : IN STD_LOGIC;
+    load : IN STD_LOGIC;
+    l : IN STD_LOGIC_VECTOR(47 DOWNTO 0);
     q : OUT STD_LOGIC_VECTOR(47 DOWNTO 0)
   );
 END COMPONENT;
@@ -68,13 +70,13 @@ END COMPONENT;
       c_count_to => "1",
       c_fb_latency => 0,
       c_has_ce => 0,
-      c_has_load => 0,
-      c_has_sclr => 1,
+      c_has_load => 1,
+      c_has_sclr => 0,
       c_has_sinit => 0,
       c_has_sset => 0,
       c_has_thresh0 => 0,
       c_implementation => 1,
-      c_latency => 2,
+      c_latency => 1,
       c_load_low => 0,
       c_restrict_count => 0,
       c_sclr_overrides_sset => 1,
@@ -90,7 +92,8 @@ BEGIN
 U0 : wrapped_BC48
   PORT MAP (
     clk => clk,
-    sclr => sclr,
+    load => load,
+    l => l,
     q => q
   );
 -- synthesis translate_on

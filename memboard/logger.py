@@ -84,7 +84,7 @@ class LoggerBase(threading.Thread):
 # Reciving data format
 #   | 32 bits   | 16 bits   | 16 bits   |
 #   | Time      | Value     | Value     |
-from .device import FrontPanel
+from .FrontPanel import FrontPanel
 import struct
 
 class Data:

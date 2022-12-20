@@ -1,4 +1,3 @@
-`timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
 // Company: 
 // Engineer: 
@@ -23,43 +22,34 @@
 `default_nettype wire
 
 //------------------------------------------------------------------------------
-//----------- Constant Declarations --------------------------------------------
-//------------------------------------------------------------------------------
-
-`define CNT_ZERO        16'h0
-`define CNT_DEC         16'h1
-`define W_CNT           15:0
-
-`define TYPE_ADC        2'b00
-`define TYPE_DAC        2'b01
-`define TYPE_SW         2'b10
-
-//------------------------------------------------------------------------------
 //----------- Module Declaration -----------------------------------------------
 //------------------------------------------------------------------------------
 
-module MUX # (parameter N_ADC=1, parameter N_DAC=1, parameter N_SW=1)
+module MUX
     (
         // Clock And Reset Signals
         input                   fpga_clk_i,             // 100MHz
-        input                   timer_clk_i,            // 1MHz
+        input                   reset_i,
+        input [47:0]            clock_i,
         
         // FPGA Interface
         input                   en_i,
-        input [7:0]             device_i,
-        input [19:0]            data_i,
+        input [23:0]            ins_i,
         output                  idle_o,
+        output reg              data_ready_o,
+        output reg [15:0]       data_o,
         
         // FIFO Interface
-        output                  fifo_wr_o,
-        output [63:0]           fifo_data_o,
+        output reg              fifo_wr_o,
+        output reg [63:0]       fifo_data_o,
 
         // ADC Interface
+        input [15:0]            ADC_CLK_DIV,
+        input [N_ADC-1:0]       ADC_TRIG_MODE,
+        
         output reg [N_ADC-1:0]  ADC_EN_OS,
         output reg [N_ADC-1:0]  ADC_RESET_OS,
-        input [N_ADC-1:0]       ADC_IDLE_IS,
         
-        output reg              ADC_READ_MODE_O,
         input [N_ADC-1:0]       ADC_DATA_READY_IS,
         input [N_ADC*32-1:0]    ADC_DATA_IS,
         
@@ -86,118 +76,92 @@ module MUX # (parameter N_ADC=1, parameter N_DAC=1, parameter N_SW=1)
 //------------------------------------------------------------------------------
 //----------- Parameters Declarations ------------------------------------------
 //------------------------------------------------------------------------------
-parameter [8:0]         ADC_CLK_DIV     = 500;
-parameter [N_ADC-1:0]   ADC_ALL         = {N_ADC{1'b1}};
-parameter [N_ADC-1:0]   ADC_NULL        = {N_ADC{1'b0}};
-parameter [N_DAC-1:0]   DAC_ALL         = {N_DAC{1'b1}};
-parameter [N_DAC-1:0]   DAC_NULL        = {N_DAC{1'b0}};
-parameter [N_SW-1:0]    SW_ALL          = {N_SW{1'b1}};
-parameter [N_SW-1:0]    SW_NULL         = {N_SW{1'b0}};
+parameter               N_ADC=1;
+parameter               N_DAC=1;
+parameter               N_SW=1;
 
-// Chip select
-wire [1:0]          device_type;
-wire [5:0]          device_no;
-reg [N_ADC-1:0]     device_selected;            // Select Device
-reg                 device_all;                 // Select All
+localparam              W_DEV           = 4;
+localparam              DEV_ALL         = {8{1'b1}};
 
-assign device_type  = device_i[7:6];
-assign device_no    = device_i[5:0];
+localparam [1:0]        TYPE_ADC        = 2'b00;
+localparam [1:0]        TYPE_DAC        = 2'b01;
+localparam [1:0]        TYPE_SW         = 2'b10;
 
-always @(device_no)
-begin
-    for (int i=0; i<N_ADC; i=i+1)
-    begin
-        if (device_no == i)
-            device_selected[i] = 1'b1;
-        else
-            device_selected[i] = 1'b0;
-    end
-    
-    if (device_no == 6'b111111)
-        device_all = 1'b1;
-    else
-        device_all = 1'b0;
-end
+localparam [N_ADC-1:0]  ADC_ALL         = {N_ADC{1'b1}};
+localparam [N_ADC-1:0]  ADC_NULL        = {N_ADC{1'b0}};
+localparam [N_DAC-1:0]  DAC_ALL         = {N_DAC{1'b1}};
+localparam [N_DAC-1:0]  DAC_NULL        = {N_DAC{1'b0}};
+localparam [N_SW-1:0]   SW_ALL          = {N_SW{1'b1}};
+localparam [N_SW-1:0]   SW_NULL         = {N_SW{1'b0}};
 
-// Flag
+// Instruction Decode
+wire [7:0]          addr;
 wire                flag_reset;
 wire                flag_clear;
-assign flag_reset   = data_i[16];
-assign flag_clear   = data_i[17];
+wire [13:0]         data;
+assign {addr, flag_reset, flag_clear, data} = ins_i;
+
+wire [1:0]          type;
+wire [W_DEV-1:0]    device;
+assign type         = addr[W_DEV+1:W_DEV];
+assign device       = addr[W_DEV-1:0];
+
+reg [15:0]          device_selected;            // Select Device
+wire                device_all;                 // Select All
+assign device_all   = addr[7];
+
+integer i;
+always @(*)
+begin
+    for (i=0; i<15; i=i+1)
+    begin
+        device_selected[i] = (device == i);
+    end
+end
 
 // Idle Status, exclude ADC due to auto trigger mode
 assign idle_o       = (DAC_IDLE_IS == DAC_ALL) & (SW_IDLE_IS == SW_ALL); 
 
 //------------------------------------------------------------------------------
-//----------- CLK Assign/Always Blocks -----------------------------------------
-//------------------------------------------------------------------------------
-wire [47:0]         _timer_q;
-wire [31:0]         time_q;
-assign time_q       = _timer_q[31:0];
-BC48 timer
-    (
-        .clk(timer_clk_i),
-        .sclr(),
-        .q(_timer_q)
-    );
-
-//------------------------------------------------------------------------------
 //----------- ADC Assign/Always Blocks -----------------------------------------
 //------------------------------------------------------------------------------
-// Data
-wire                flag_adc_read_mode;
-wire                flag_adc_trig_mode;
-assign flag_adc_read_mode   = data_i[18];
-assign flag_adc_trig_mdoe   = data_i[19];       // Trigger mode 1=auto, 0=external
-
 // ADC Clock Register
-reg                 adc_read_mode;
-reg [N_ADC-1:0]     adc_trig_mode;
-reg [8:0]           adc_clk_count;
-reg                 adc_clk;                    // ADC clock
+wire                adc_clk;                    // ADC clock
+wire [47:0]         adc_timer_q;
+BC48 adc_timer
+    (
+        .clk(fpga_clk_i),
+        .l(48'h1),
+        .load(adc_clk),
+        .q(adc_timer_q)
+    );
+assign adc_clk = (adc_timer_q[15:0] == ADC_CLK_DIV);
 
-// ADC Clock Generator
-always @(posedge fpga_clk_i)
-begin
-    if (adc_trig_mode == 1'b1)
-    begin
-        if (adc_clk_count == ADC_CLK_DIV)
-        begin
-            adc_clk_conut <= 0;
-            adc_clk <= 1'b1;
-        end
-        else
-        begin
-            adc_clk_count <= adc_clk_count + 1;
-            adc_clk <= 1'b0;
-        end
-    end
-    else
-    begin
-        adc_clk_count <= 0;
-        adc_clk <= 1'b0;
-    end
-end
-                 
 // ADC trigger
+reg [W_DEV-1:0]     data_device;
+reg                 data_addr;
+
+wire                adc_addr;
+assign adc_addr     = data[0]; 
+
 always @(posedge fpga_clk_i)
 begin
-    if (en_i == 1'b1)
+    ADC_RESET_OS            <= ADC_NULL;
+    
+    if (reset_i == 1'b1)
     begin
-        ADC_READ_MODE_O         <= flag_adc_read_mode;
+        ADC_EN_OS               <= ADC_NULL;
+        data_device             <= 0;
+        data_addr               <= 1'b0;
+    end
+    else if (en_i == 1'b1 && type == TYPE_ADC)
+    begin
         if (device_all == 1'b1)
         begin
             if (flag_reset == 1'b1)
             begin
                 ADC_EN_OS       <= ADC_NULL;
                 ADC_RESET_OS    <= ADC_ALL;
-                adc_trig_mode   <= ADC_NULL;
-            end
-            else if (flag_adc_trig_mode == 1'b1)
-            begin
-                ADC_EN_OS       <= ADC_ALL;
-                ADC_RESET_OS    <= ADC_NULL;
-                adc_trig_mode   <= ADC_ALL;
             end
             else
             begin
@@ -209,76 +173,96 @@ begin
         begin
             if (flag_reset == 1'b1)
             begin
-                ADC_EN_OS       <= (adc_clk ? adc_trig_mode : ADC_NULL) & (~device_selected);
+                ADC_EN_OS       <= (adc_clk ? ADC_TRIG_MODE : ADC_NULL) & (~device_selected);
                 ADC_RESET_OS    <= device_selected;
-                adc_trig_mode   <= adc_trig_mode & (~device_selected);
-            end
-            else if (flag_adc_trig_mode == 1'b1)
-            begin
-                ADC_EN_OS       <= (adc_clk ? adc_trig_mode : ADC_NULL) | device_selected;
-                ADC_RESET_OS    <= ADC_NULL;
-                adc_trig_mode   <= adc_trig_mode | device_selected;
             end
             else
             begin
-                ADC_EN_OS       <= (adc_clk ? adc_trig_mode : ADC_NULL) | device_selected;
+                ADC_EN_OS       <= (adc_clk ? ADC_TRIG_MODE : ADC_NULL) | device_selected;
                 ADC_RESET_OS    <= ADC_NULL;
+                data_device     <= device;
+                data_addr       <= adc_addr;
             end
         end
     end
     else
     begin
-        ADC_EN_OS               <= (adc_clk ? adc_trig_mode : ADC_NULL);
-        ADC_RESET_OS            <= ADC_NULL;
+        ADC_EN_OS               <= (adc_clk ? ADC_TRIG_MODE : ADC_NULL);
     end
 end
                  
-// ADC Input
-reg [5:0]     rr_i = 0;
+// ADC Output
+reg [W_DEV-1:0]     rr_i = 0;
+reg [N_ADC-1:0]     adc_data_ready = 0;
+reg [N_ADC*32-1:0]  adc_data = 0;
+
 always @(posedge fpga_clk_i)
 begin
-    // Data Register
-    for (int i=0; i<N_ADC; i=i+1)
-    begin
-        if (ADC_DATA_READY_IS[i] == 1'b1)
-        begin
-            adc_data_ready[i]       <= 1'b1;
-            adc_data[i*32 +: 32]    <= ADC_DATA_IS[i*32 +: 32];
-        end
-    end
+    data_ready_o        <= 1'b0;
+    fifo_wr_o           <= 1'b0;
     
-    // Write To FIFO
-    if (adc_data_ready[rr_i] == 1'b1)
+    if (reset_i == 1'b1)
     begin
-        fifo_wr_o       <= 1'b1;
-        fifo_data_o     <= {timer_q, adc_data[rr_i*32 +: 32]};
-    end
-    else
-    begin
-        fifo_wr_o       <= 1'b0;
-    end
-    
-    // Round Robin
-    if (rr_i < N_ADC-1)
-    begin
-        rr_i            <= rr_i + 1;
-    end
-    else
-    begin
+        adc_data_ready  <= 0;
+        adc_data        <= 0;
         rr_i            <= 0;
+        fifo_data_o     <= 0;
+    end
+    else
+    begin
+        // Data Register
+        for (i=0; i<N_ADC; i=i+1)
+        begin
+            if ((ADC_TRIG_MODE[i] == 1'b0) && (ADC_DATA_READY_IS[i] == 1'b1))
+            begin
+                adc_data_ready[i]       <= 1'b1;
+                adc_data[i*32 +: 32]    <= ADC_DATA_IS[i*32 +: 32];
+            end
+        end
+
+        // Round Robin
+        if (rr_i < N_ADC-1)
+        begin
+            rr_i            <= rr_i + 1;
+        end
+        else
+        begin
+            rr_i            <= 0;
+        end
+    
+        // Write To FIFO
+        if (adc_data_ready[rr_i] == 1'b1)
+        begin
+            fifo_wr_o       <= 1'b1;
+            fifo_data_o     <= {clock_i[23:0], {8-W_DEV{1'b0}}, rr_i, adc_data[rr_i*32 +: 32]};
+            adc_data_ready[rr_i] <= 1'b0;
+            
+            // ADC Data Direct Access
+            // Only available for non auto-trigging ADCs
+            if (rr_i == data_device)
+            begin
+                data_o      <= data_addr ? adc_data[rr_i*32+16 +: 16]: adc_data[rr_i*32 +: 16];
+                data_ready_o<= 1'b1;
+            end
+        end
     end
 end
 
 //------------------------------------------------------------------------------
 //----------- DAC Assign/Always Blocks -----------------------------------------
 //------------------------------------------------------------------------------
-// Data
-wire [13:0]         dac_data;
-assign dac_data     = data_i[13:0];
+wire [1:0]          dac_addr;
+wire [11:0]         dac_data;
+assign dac_addr     = data[13:12];
+assign dac_data     = data[11:0];
 
 always @(posedge fpga_clk_i)
 begin
-    if (en_i == 1'b1)
+    DAC_EN_OS               <= DAC_NULL;
+    DAC_RESET_OS            <= DAC_NULL;
+    DAC_CLEAR_O             <= 1'b0;
+    
+    if (en_i == 1'b1 && type == TYPE_DAC)
     begin
         if (device_all == 1'b1)
         begin
@@ -320,16 +304,10 @@ begin
                 DAC_EN_OS       <= device_selected;
                 DAC_RESET_OS    <= DAC_NULL;
                 DAC_CLEAR_O     <= 1'b0;
-                DAC_DATA_O      <= dac_data[11:0];
-                DAC_ADDR_O      <= dac_data[13:12];
+                DAC_DATA_O      <= dac_data;
+                DAC_ADDR_O      <= dac_addr;
             end
         end
-    end
-    else
-    begin
-        DAC_EN_OS               <= DAC_NULL;
-        DAC_RESET_OS            <= DAC_NULL;
-        DAC_CLEAR_O             <= 1'b0;
     end
 end
 
@@ -337,12 +315,20 @@ end
 //----------- SW Assign/Always Blocks ------------------------------------------
 //------------------------------------------------------------------------------
 // Data
-wire [7:0]          sw_data;
-assign sw_data      = data_i[7:0];
+wire [3:0]          sw_ax;
+wire [2:0]          sw_ay;
+wire                sw_data;
+assign sw_ax        = data[3:0];
+assign sw_ay        = data[6:4];
+assign sw_data      = data[8];
 
 always @(posedge fpga_clk_i)
 begin
-    if (en_i == 1'b1)
+    SW_EN_OS                <= SW_NULL;
+    SW_RESET_OS             <= SW_NULL;
+    SW_CLEAR_O              <= 1'b0;
+
+    if (en_i == 1'b1 && type == TYPE_SW)
     begin
         if (device_all == 1'b1)
         begin
@@ -384,17 +370,11 @@ begin
                 SW_EN_OS        <= device_selected;
                 SW_RESET_OS     <= SW_NULL;
                 SW_CLEAR_O      <= 1'b0;
-                SW_AX_O         <= sw_data[3:0];
-                SW_AY_O         <= sw_data[6:4];
-                SW_DATA_O       <= sw_data[7];
+                SW_AX_O         <= sw_ax;
+                SW_AY_O         <= sw_ay;
+                SW_DATA_O       <= sw_data;
             end
         end
-    end
-    else
-    begin
-        SW_EN_OS                <= SW_NULL;
-        SW_RESET_OS             <= SW_NULL;
-        SW_CLEAR_O              <= 1'b0;
     end
 end
 

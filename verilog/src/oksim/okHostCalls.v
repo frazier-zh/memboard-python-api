@@ -350,35 +350,23 @@ endtask
 // User defined task for multiple pipe
 //---------------------------------------------------------
 //---------------------------------------------------------
-// WriteToPipeIn2
+// WriteToPipeInSingle
 //---------------------------------------------------------
-task WriteToPipeIn2 (
+task WriteToPipeInSingle (
    input    [7:0]    ep,
-   input    [31:0]   length
+   input    [15:0]   data
 );
-   integer           len, i, j, k, blockSize;
+   integer           len;
 begin
-   len = length/2; j = 0; k = 0; blockSize = 1024;
-   if (length%2)
-      $display("Error. Pipes commands may only send and receive an even # of bytes.");
+   len = 1;
    @(posedge hi_in[0]) hi_in[1] = 1;
    hi_in[7:4] = `DWriteToPipeIn;
    hi_dataout = {BlockDelayStates, ep};
    @(posedge hi_in[0]) hi_in[7:4] = `DNOP;
    hi_dataout = len;
    @(posedge hi_in[0]) hi_dataout = (len >> 16);
-   for (i=0; i < length; i=i+2) begin
-      @(posedge hi_in[0]);
-      hi_dataout[7:0] = pipeIn2[i];
-      hi_dataout[15:8] = pipeIn2[i+1];
-      j=j+2;
-      if (j == blockSize) begin
-         for (k=0; k < BlockDelayStates; k=k+1) begin
-            @(posedge hi_in[0]);
-         end
-         j=0;
-      end
-   end
+   @(posedge hi_in[0]);
+   hi_dataout = data;
    wait (hi_out[0] == 0);
 end
 endtask

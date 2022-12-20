@@ -46,15 +46,7 @@ module AD5725
         output reg          CS_N_O,             // AD5725 CS
         output reg          CLR_N_O             // AD5725 CLR
     );
-    
-//------------------------------------------------------------------------------
-//----------- Constant Declarations --------------------------------------------
-//------------------------------------------------------------------------------
 
-`define CNT_ZERO        4'h0
-`define CNT_DEC         4'h1
-`define W_CNT           3:0
-    
 //------------------------------------------------------------------------------
 //----------- Registers Declarations -------------------------------------------
 //------------------------------------------------------------------------------
@@ -62,16 +54,17 @@ module AD5725
 reg [5:0]       present_state;
 reg [5:0]       next_state;
 
-reg [`W_CNT]    cs_hold_cnt;
-reg [`W_CNT]    clr_hold_cnt;
+reg [15:0]      cs_hold_cnt;
+reg [15:0]      clr_hold_cnt;
 
 reg             clear_en;
 
 //------------------------------------------------------------------------------
 //----------- Local Parameters -------------------------------------------------
 //------------------------------------------------------------------------------
-// DAC States
+parameter TIME_ZERO                 = 16'b0;
 
+// DAC States
 parameter DAC_IDLE_STATE            = 6'b000001;
 parameter DAC_RW_STATE              = 6'b000100;
 parameter DAC_CS_STATE              = 6'b001000;
@@ -79,9 +72,8 @@ parameter DAC_LDAC_STATE            = 6'b010000;
 parameter DAC_CLR_STATE             = 6'b100000;
 
 // DAC Timing
-parameter [`W_CNT]      DAC_CS_HOLD_TIME    = 1;
-parameter [`W_CNT]      DAC_LDAC_HOLD_TIME  = 1;
-parameter [`W_CNT]      DAC_CLR_HOLD_TIME   = 1;
+parameter [15:0]        DAC_CS_HOLD_TIME    = 1;
+parameter [15:0]        DAC_CLR_HOLD_TIME   = 1;
 
 //------------------------------------------------------------------------------
 //----------- Assign/Always Blocks ---------------------------------------------
@@ -93,9 +85,9 @@ always @(posedge FPGA_CLK_I)
 begin
     if (present_state == DAC_CS_STATE)
     begin
-        if (cs_hold_cnt > `CNT_ZERO)
+        if (cs_hold_cnt > TIME_ZERO)
         begin
-            cs_hold_cnt <= cs_hold_cnt - `CNT_DEC;
+            cs_hold_cnt <= cs_hold_cnt - 1'b1;
         end
     end
     else
@@ -105,9 +97,9 @@ begin
     
     if (present_state == DAC_CLR_STATE)
     begin
-        if (clr_hold_cnt > `CNT_ZERO)
+        if (clr_hold_cnt > TIME_ZERO)
         begin
-            clr_hold_cnt <= clr_hold_cnt - `CNT_DEC;
+            clr_hold_cnt <= clr_hold_cnt - 1'b1;
         end
     end
     else
@@ -116,13 +108,13 @@ begin
     end
 end
 
-// Write Mode
+// Write 
 always @(posedge FPGA_CLK_I)
 begin
     if (present_state == DAC_RW_STATE)
     begin
-        AD_O            <= DATA_I;
-        DB_O            <= ADDR_I;
+        AD_O            <= ADDR_I;
+        DB_O            <= DATA_I;
     end
 end
 
@@ -140,7 +132,7 @@ begin
 end
 
 // State switching logic
-always @(present_state, EN_I, CLR_I, cs_hold_cnt, ldac_hold_cnt, clr_hold_cnt)
+always @(*)
 begin
     next_state = present_state;
     case (present_state)
@@ -164,7 +156,7 @@ begin
             end
         DAC_CS_STATE:
             begin
-                if (cs_hold_cnt == `CNT_ZERO)
+                if (cs_hold_cnt == TIME_ZERO)
                 begin
                     next_state = DAC_LDAC_STATE;
                 end
@@ -175,7 +167,7 @@ begin
             end
         DAC_CLR_STATE:
             begin
-                if (clr_hold_cnt == `CNT_ZERO)
+                if (clr_hold_cnt == TIME_ZERO)
                 begin
                     next_state = DAC_IDLE_STATE;
                 end

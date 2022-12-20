@@ -127,7 +127,7 @@ parameter ADC_SCLK_PERIODS_SINGLE   = 28'h8000000;
 
 // ADC Timing
 parameter real      FPGA_CLOCK_FREQ = 100 ;
-parameter real      CYCLE_TIME      = 2;
+parameter real      CYCLE_TIME      = 1.8;
 parameter [31:0]    ADC_CYCLE_TIME  = FPGA_CLOCK_FREQ * CYCLE_TIME - 2;
 
 //------------------------------------------------------------------------------
@@ -293,6 +293,7 @@ begin
             CNVST_N_O       <= 1'b0;
             DATA_RD_READY_O <= 1'b0;
             CS_N_O          <= 1'b1;
+            sync_read_mode  <= READ_MODE_I;
         end
         ADC_WAIT_BUSY_LOW_STATE:
         begin
@@ -336,7 +337,6 @@ begin
             CNVST_N_O       <= 1'b1;
             DATA_RD_READY_O <= 1'b0;
             CS_N_O          <= 1'b1;
-            sync_read_mode  <= READ_MODE_I;
         end
         default:
         begin

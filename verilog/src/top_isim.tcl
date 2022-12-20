@@ -1,62 +1,53 @@
 onerror {resume}
 
-wave add -radix bin CLK
-wave add -radix bin /top_tb/uut/ti_clk
+wave add -radix bin CLK0
+wave add -radix bin CLK1
+wave add -radix bin /Top_tb/uut/ti_clk
 
-divider add "Wire/Trigger data"
-wave add -radix bin /top_tb/uut/fifo_rst
-wave add -radix bin /top_tb/uut/mem_rst
-wave add -radix bin /top_tb/uut/logic_rst
-wave add -radix bin /top_tb/uut/logic_en
-wave add -radix bin /top_tb/uut/logic_auto
+divider add "Trigger"
+wave add -radix bin /Top_tb/uut/trigger_in
+wave add -radix bin /Top_tb/uut/direct_data_ready
 
-divider add "Pipe data"
-wave add -radix hex /top_tb/uut/data16_in
-wave add -radix hex /top_tb/uut/data32_in
-wave add -radix hex /top_tb/uut/data16_out
-wave add -radix hex /top_tb/uut/time16_in
+divider add "Data"
+wave add -radix bin /Top_tb/uut/pipe80_write
+wave add -radix hex /Top_tb/uut/pipe80_dataout
+wave add -radix bin /Top_tb/uut/fifo_in_empty
+wave add -radix hex /Top_tb/uut/fifo_in_dout
+wave add -radix bin /Top_tb/uut/fifo_in_rd_en
+wave add -radix hex /Top_tb/uut/fifo_out_rd_data_count
+wave add -radix hex /Top_tb/uut/direct_data
 
-divider add "Memeory"
-wave add -radix bin /top_tb/uut/mem_valid
-wave add -radix bin /top_tb/uut/mem_read
-wave add -radix bin /top_tb/uut/mem_zero
-wave add -radix bin /top_tb/uut/mem_ctrl/din_empty
-wave add -radix hex /top_tb/uut/mem_ctrl/rd_addr
-wave add -radix hex /top_tb/uut/mem_ctrl/wr_addr
+divider add "IF"
+wave add -radix bin /Top_tb/uut/if_main/ins_rdy
+wave add -radix bin /Top_tb/uut/if_main/ins_stall
+wave add -radix bin /Top_tb/uut/if_main/INS
+wave add -radix hex /Top_tb/uut/if_main/sr0
+wave add -radix hex /Top_tb/uut/if_main/sr1
+wave add -radix bin /Top_tb/uut/mux_en
 
-divider add "Main data"
-wave add -radix hex /top_tb/uut/logic_count
-wave add -radix hex /top_tb/uut/logic_state
-wave add -radix hex /top_tb/uut/mem_in
-wave add -radix hex /top_tb/uut/main_bus
-wave add -radix bin /top_tb/uut/data_write
-wave add -radix hex /top_tb/uut/data_out
+divider add "Register"
+wave add -radix hex /Top_tb/uut/reg_addr
+wave add -radix hex /Top_tb/uut/reg_data
+wave add -radix hex /Top_tb/uut/REG_ADC_CLK_DIV
+wave add -radix bin /Top_tb/uut/REG_ADC_READ_MODE
+wave add -radix bin /Top_tb/uut/REG_ADC_TRIG_MODE
+wave add -radix bin /Top_tb/uut/REG_ADC_ADDR
+wave add -radix bin /Top_tb/uut/ADC_IDLE
+wave add -radix bin /Top_tb/uut/DAC_IDLE
+wave add -radix bin /Top_tb/uut/SW_IDLE
 
-divider add "Clock signals"
-wave add -radix hex /top_tb/uut/clock_clr
-wave add -radix hex /top_tb/uut/cd_en
-wave add -radix hex /top_tb/uut/cd_rdy
-wave add -radix hex /top_tb/uut/clock/counter_data
-wave add -radix hex /top_tb/uut/time16_write
-
-divider add "Hardward control signals"
-wave add -radix bin /top_tb/uut/dev_cs
-wave add -radix bin /top_tb/uut/dev_rdy
+divider add "Clock"
+wave add -radix hex /Top_tb/uut/clock_q
 
 divider add "Hardware signals"
-wave add -radix hex /top_tb/CS_DAC
-wave add -radix hex /top_tb/CS_SW1
-wave add -radix hex /top_tb/CS_SW2
-wave add -radix hex /top_tb/CS_SW3
-wave add -radix hex /top_tb/CS_SW4
-wave add -radix hex /top_tb/CS_SW5
-wave add -radix hex /top_tb/CS_SW6
-
-wave add -radix hex /top_tb/CS_ADC
-wave add -radix hex /top_tb/BUSY_ADC
-wave add -radix hex /top_tb/DOUTA_ADC
-wave add -radix hex /top_tb/DOUTB_ADC
-wave add -radix hex /top_tb/SCLK_ADC
-wave add -radix hex /top_tb/CNVST_ADC
-
-run 20us;
+wave add -radix hex /Top_tb/CS_DAC
+wave add -radix hex /Top_tb/CS_SW1
+wave add -radix hex /Top_tb/CS_SW2
+wave add -radix hex /Top_tb/CS_SW3
+wave add -radix hex /Top_tb/CS_SW4
+wave add -radix hex /Top_tb/CS_SW5
+wave add -radix hex /Top_tb/CS_SW6
+wave add -radix hex /Top_tb/CNVST_ADC
+wave add -radix hex /Top_tb/BUSY_ADC
+wave add -radix hex /Top_tb/CS_ADC
+wave add -radix hex /Top_tb/SCLK_ADC

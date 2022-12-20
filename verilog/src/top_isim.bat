@@ -9,5 +9,5 @@ fuse -intstyle ise ^
      -i ./oksim ^
      -o top_isim.exe ^
      -prj top_isim.prj ^
-     work.top_tb work.glbl
+     work.Top_tb work.glbl
 top_isim.exe -gui -tclbatch top_isim.tcl -wdb top_isim.wdb

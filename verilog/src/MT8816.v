@@ -40,21 +40,13 @@ module MT8816
         output              IDLE_O,             // Idle State
         
         // MT8816 Control Signals
-        output              RESET_O,            // MT8816 RESET
-        output              CS_O,               // MT8816 CS
+        output reg          RESET_O,            // MT8816 RESET
+        output reg          CS_O,               // MT8816 CS
         output reg          STROBE_O,           // MT8816 STROBE
         output reg [3:0]    AX_O,               // MT8816 AX
         output reg [2:0]    AY_O,               // MT8816 AY
         output reg          DATA_O              // MT8816 DATA
     );
-    
-//------------------------------------------------------------------------------
-//----------- Constant Declarations --------------------------------------------
-//------------------------------------------------------------------------------
-
-`define CNT_ZERO        4'h0
-`define CNT_DEC         4'h1
-`define W_CNT           3:0
 
 //------------------------------------------------------------------------------
 //----------- Registers Declarations -------------------------------------------
@@ -63,10 +55,10 @@ module MT8816
 reg [4:0]       present_state;
 reg [4:0]       next_state;
 
-reg [`W_CNT]    cs_setup_cnt;
-reg [`W_CNT]    strobe_hold_cnt;
-reg [`W_CNT]    cs_hold_cnt;
-reg [`W_CNT]    clr_hold_cnt;
+reg [15:0]      cs_setup_cnt;
+reg [15:0]      strobe_hold_cnt;
+reg [15:0]      cs_hold_cnt;
+reg [15:0]      clr_hold_cnt;
 
 //------------------------------------------------------------------------------
 //----------- Local Parameters -------------------------------------------------
@@ -79,10 +71,11 @@ parameter SW_STROBE_STATE       = 5'b00100;
 parameter SW_CS_EN_STATE        = 5'b01000;
 parameter SW_CLR_STATE          = 5'b10000;
 
-parameter [`W_CNT] SW_RESET_HOLD_TIME   = 4;
-parameter [`W_CNT] SW_STROBE_HOLD_TIME  = 2;
-parameter [`W_CNT] SW_CS_SETUP_TIME     = 1;
-parameter [`W_CNT] SW_CS_HOLD_TIME      = 1;
+parameter [15:0] TIME_ZERO              = 16'b0;
+parameter [15:0] SW_CLR_HOLD_TIME     = 4;
+parameter [15:0] SW_STROBE_HOLD_TIME    = 2;
+parameter [15:0] SW_CS_SETUP_TIME       = 1;
+parameter [15:0] SW_CS_HOLD_TIME        = 1;
 
 
 //------------------------------------------------------------------------------
@@ -95,9 +88,9 @@ always @(posedge FPGA_CLK_I)
 begin
     if (present_state == SW_CS_STATE)
     begin
-        if (cs_setup_cnt > `CNT_ZERO)
+        if (cs_setup_cnt > TIME_ZERO)
         begin
-            cs_setup_cnt <= cs_setup_cnt - `CNT_DEC;
+            cs_setup_cnt <= cs_setup_cnt - 1'b1;
         end
     end
     else
@@ -107,9 +100,9 @@ begin
     
     if (present_state == SW_STROBE_STATE)
     begin
-        if (strobe_hold_cnt > `CNT_ZERO)
+        if (strobe_hold_cnt > TIME_ZERO)
         begin
-            strobe_hold_cnt <= strobe_hold_cnt - `CNT_DEC;
+            strobe_hold_cnt <= strobe_hold_cnt - 1'b1;
         end
     end
     else
@@ -119,9 +112,9 @@ begin
     
     if (present_state == SW_CS_EN_STATE)
     begin
-        if (cs_hold_cnt > `CNT_ZERO)
+        if (cs_hold_cnt > TIME_ZERO)
         begin
-            cs_hold_cnt <= cs_hold_cnt - `CNT_DEC;
+            cs_hold_cnt <= cs_hold_cnt - 1'b1;
         end
     end
     else
@@ -131,9 +124,9 @@ begin
     
     if (present_state == SW_CLR_STATE)
     begin
-        if (clr_hold_cnt > `CNT_ZERO)
+        if (clr_hold_cnt > TIME_ZERO)
         begin
-            clr_hold_cnt <= clr_hold_cnt - `CNT_DEC;
+            clr_hold_cnt <= clr_hold_cnt - 1'b1;
         end
     end
     else
@@ -170,7 +163,7 @@ always @(posedge FPGA_CLK_I)
 begin
     if (RESET_N_I == 1'b0)
     begin
-        present_state <= DAC_IDLE_STATE;
+        present_state <= SW_IDLE_STATE;
     end
     else
     begin
@@ -179,7 +172,7 @@ begin
 end
 
 // State switching logic
-always @(present_state, EN_I, CLR_I)
+always @(*)
 begin
     next_state = present_state;
     case (present_state)
@@ -189,38 +182,38 @@ begin
                 begin
                     if (CLR_I == 1'b1)
                     begin
-                        next_state = DAC_CLR_STATE;
+                        next_state = SW_CLR_STATE;
                     end
                     else
                     begin
-                        next_state = DAC_START_STATE;
+                        next_state = SW_CS_STATE;
                     end
                 end 
             end
         SW_CS_STATE:
             begin
-                if (cs_setup_cnt == `CNT_ZERO)
+                if (cs_setup_cnt == TIME_ZERO)
                 begin
                     next_state = SW_STROBE_STATE;
                 end
             end
         SW_STROBE_STATE:
             begin
-                if (strobe_hold_cnt == `CNT_ZERO)
+                if (strobe_hold_cnt == TIME_ZERO)
                 begin
                     next_state = SW_CS_EN_STATE;
                 end
             end
         SW_CS_EN_STATE:
             begin
-                if (cs_hold_cnt == `CNT_ZERO)
+                if (cs_hold_cnt == TIME_ZERO)
                 begin
                     next_state = SW_IDLE_STATE;
                 end
             end
         SW_CLR_STATE:
             begin
-                if (reset_hold_cnt == `CNT_ZERO)
+                if (clr_hold_cnt == TIME_ZERO)
                 begin
                     next_state = SW_IDLE_STATE;
                 end
