@@ -6,3 +6,5 @@ __pycache__/
 *.mem*
 debug.*
 test.*
+
+verilog/ADC_tb
