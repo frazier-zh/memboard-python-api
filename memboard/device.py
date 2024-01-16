@@ -4,8 +4,7 @@ import logging
 import time
 
 __device = ok.okCFrontPanel()
-__module_logger = logging.getLogger(__name__)
-__debug = False
+__logger = logging.getLogger(__name__)
 
 error_codes = {
     0: 'NoError',
@@ -36,36 +35,11 @@ error_codes = {
     -102: 'TimeOutError'
 }
 
-def debug(enable):
-    global __debug
-    __debug = enable
-
-def _try(code, throw=True):
-    if code>=0:
-        return code
-    elif not code in error_codes:
+def _try(code):
+    if not code in error_codes:
         code = -100
 
-    global __debug
-    if __debug:
-        try:
-            if (_try.last == code):
-                _try.count += 1
-            else:
-                if _try.count>0:
-                    __module_logger.error(f'{error_codes[_try.last]} <folded {_try.count} repeating errors>.')
-                __module_logger.error(error_codes[code])
-                _try.last = code
-                _try.count = 0
-        except AttributeError:
-            __module_logger.error(error_codes[code])
-            _try.last = code
-            _try.count = 0
-    else:
-        if throw:
-            raise RuntimeError(error_codes[code])
-        else:
-            __module_logger.error(error_codes[code])
+    __logger.error(error_codes[code])
 
 def open():
     _try(__device.GetDeviceCount())
@@ -97,7 +71,7 @@ def wait_trigger_out(addr, index, time_out=1):
 
     while not triggered:
         if (time.time()-start_time > time_out):
-            _try(-102, throw=False)
+            __logger.error(error_codes[-102])
             return False
         _try(__device.UpdateTriggerOuts())
         triggered = _try(__device.IsTriggered(addr, index))

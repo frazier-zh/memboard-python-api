@@ -44,9 +44,7 @@ After installing FrontPanel SDK, you should add FrontPanel Python API to system 
 
 ## Powering The Board
 
-## Example
-
-In this example, 
+## Quick Start
 
 ```Python
 import memboard as mb
@@ -79,31 +77,15 @@ with mb.connect('../verilog/src/top.bit'):
 
 ## API Reference
 
-### `connect(path, debug)`
+### class Board()
 
-|Parameters|Type|Details
-|---|---|---|
-|path|str|Indicates path of FPGA binary file "top.bit"|
-|debug|bool|Indicates debug mode|
+#### `apply()`
 
-### `add(func)`
+#### `measure()`
 
-|Parameters|Type|Details
-|---|---|---|
+#### `wait()`
 
-### `execute()`
-
-### `reset()`
-
-### `apply()`
-
-### `ground()`
-
-### `measure()`
-
-### `wait()`
-
-### `time()`
+#### `time()`
 
 ## Datasheet
 
@@ -127,13 +109,13 @@ with mb.connect('../verilog/src/top.bit'):
 |Gate|29-54|-|Channel 2|
 |Drain|55-84|Channel 1|Channel 3|
 
-**Channel 0 should always be set to 0V (GND).*
+>Note: Channel 0 should always be set to 0V (GND).*
 
 ### 4. Non-idealities
 
-1. DAC maximum glitch amplitude is 1V.
-2. DAC maximum glitch time is 1000ns.
-3. Switch settling time is 100ns.
+1. DAC maximum glitch amplitude: 1V.
+2. DAC maximum glitch time: 1000ns.
+3. Switch settling time: 100ns.
 
 ## FPGA Programming Guide
 

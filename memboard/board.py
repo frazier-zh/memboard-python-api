@@ -1,303 +1,298 @@
-from pydoc import _OldStyleClass
-from . import device
-from .const import dev, state, op
-from . import unit as u
-
+from dataclasses import dataclass
 from functools import wraps
+
+from .test import Procedure
+from . import device
+from . import const
+from .const import OP, Port, State
+from . import unit
+import time
+import csv
+import asyncio
+
+from bitarray import bitarray
+from bitarray.util import int2ba as i2b
+from bitarray.util import ba2int as b2i
+
 import logging
-__module_logger = logging.getLogger(__name__)
+__logger = logging.getLogger(__name__)
 
 import numpy as np
 
-# API code generate
-class code:
-    def convert(*args):
-        """Convert to bytecode
-        Args:
-            [dev:4, op:4, addr:8, value:16/24], ...
-            'value:size' indicates bit size of given Value.
-        """
-        code = np.zeros(len(args), dtype=np.uint32)
-        for i, inst in enumerate(args):
-            code[i] = inst[0]
-            if len(inst) == 4:
-                code[i] += (inst[1]<<4)+(inst[2]<<8)+(inst[3]<<16)
-            elif len(inst) == 3:
-                code[i] += (inst[1]<<4)+(inst[2]<<8)
-            elif len(inst) == 2:
-                code[i] += (inst[1]<<4)
+class Output:
+    def __init__(self):
+        self.index = 0
+        self.list = []
+        self.size = 0
 
-        return code
+    def add(self, name, size, func):
+        if name == '':
+            name = f'x{self.index}'
+        self.list.append((name, size, func))
+        self.index += 1
+        self.size += size
 
-    def adc(channel=0):
-        if channel not in [0, 1]:
-            raise ValueError("Invalid ADC channel.")
-        return code.convert([dev.adc, op.enable, channel])
+    def clear(self):
+        self.list.clear()
+        self.index = 0
+        self.size = 0
 
-    def dac(channel=0, value=0x800):
-        if channel not in range(4):
-            raise ValueError("Invalid DAC channel.")
-        if channel==0 and not value==0x800:
-            __module_logger.warn("DAC channel 0 should always be set to 0x800.")
-        if value not in range(0x1000):
-            raise ValueError("Invalid DAC value, max 0xFFF.")
+    def convert(self, data, out):
+        read_size = self.size*2
+        with open(out+'.csv', 'w', newline='') as csvfile:
+            fieldnames = [item[0] for item in self.list]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
 
-        return code.convert([dev['dac'], op['enable'], channel, value])
+            temp = {}
+            with open(out+'.dat', 'rb') as file:
+                data = file.read(read_size)
+                while data:
+                    data_16b = np.frombuffer(data, dtype=np.uint16)
+                    for i in range(self.index):
+                        name = self.list[i][0]
+                        size = self.list[i][1]
+                        func = self.list[i][2]
+                        temp[name] = func(data_16b[:size])
+                        data_16b = data_16b[size:]
 
-    def switch():
-        pass
+                    writer.writerow(temp)
+                    data = file.read(read_size)
 
-    def wait(time):
-        """Ask FPGA to wait for a precise time period
-        """
-        time = int(time/(10*u.ns))
-        if time<5 or (time>>48):
-            raise ValueError("Invalid waiting time, max 30 days.")
-        elif time>>24:
-            return code.convert(
-                [dev.timer, op.high, time>>24],
-                [dev.timer, op.low, time % 0x1000000]
-            )
+# API code OP class
+@dataclass
+class Ins:
+    op: OP
+    rst_flag: bool = False
+    en_flag: bool = False
+    tic_flag: bool = False
+    ext_flag: bool = False
+    data: int = 0
+    tic: int = 0
+
+    def code(self):
+        c = i2b(self.op, 4)
+        c = bitarray([self.tic_flag, self.ext_flag, self.en_flag, self.rst_flag]).extend(c)
+        c = i2b(self.data, 24).extend(c)
+        if self.tic_flag:
+            c.extend(i2b(self.tic, 32))
+        return c
+
+def executable(method):
+    @wraps(method)
+    def wrapper(ref, *args, **kwargs):
+        inst = method(ref, *args, **kwargs)
+
+        if ref.debug_mode:
+            return ref.execute(inst)
         else:
-            return code.convert([dev.timer, op.low, time % 0x1000000])
-
-    def get_time():
-        pass
-
-    def get_adc():
-        # TODO
-        pass
+            ref.inst.append(inst)
+    return wrapper
 
 # Board control
-class board:
+class Board:
+    # Basic board operation
     def __init__(self):
-        self.state = np.zeros()
+        self.state = np.zeros(len(OP), dtype=np.uint8)
+        #self.dac = np.zeros(4, dtype=np.uint16)
+        self.connection = np.zeros((6, 16, 8), dtype=bool)
+
+        self.debug_mode = False
+        self.inst = []
+
+        self.force_mode = True
+        self.time_out = 1 *unit.s
+
+        #self.verbose = 'socket'
 
     def open(self):
         device.open()
         device.load('./verilog/src/top.bit')
+        self.reset()
+        self.reset(OP.adc)
+        self.reset(OP.dac)
+        self.reset(OP.switch)
 
     def close(self):
         device.close()
 
-    def reset(self):
-        device.trigger_in(0x40, 0) # Reset logic block
-        device.trigger_in(0x40, 1) # Reset memory block
-        device.trigger_in(0x40, 2) # Reset fifo blocks
+    def reset(self, Mode: OP=OP.logic):
+        if Mode == OP.logic:
+            device.trigger_in(0x40, 0) # Reset logic block
+            device.trigger_in(0x40, 1) # Reset memory block
+            device.trigger_in(0x40, 2) # Reset fifo blocks
+        elif Mode == OP.adc:
+            self.adc(reset=True)
+        elif Mode == OP.dac:
+            self.dac(reset=True)
+        elif Mode == OP.switch:
+            self.switch(reset=True)
+
+        self.connection.fill(0)
 
     def start(self):
         device.wire_in(0x00, 0b01)
 
-    def start_auto(self):
-        device.wire_in(0x00, 0b11) # Enable execution
-
-    def wait_stop(time_out=1):
-        start_time = time.time()
-        while not get_state(dev.logic) == state.idle:
-            if (time.time()-start_time > time_out):
-                device.trigger_in(0x40, 0)
-                raise TimeoutError('Time out while waiting on main logic.')
-        stop()
+    # def start_auto(self):
+    #     device.wire_in(0x00, 0b11) # Enable execution
 
     def stop(self):
         device.wire_in(0x00, 0b00) # Stop execution
 
-    def set_prog(self, code):
-        device.pipe_in(0x80, u.to_byte(code)) # Load program
+    def load_prog(self, code):
+        device.pipe_in(0x80, unit.to_byte(code)) # Load program
 
-    def set_clock(self, every):
-        device.pipe_in(0x81, u.to_byte(u.to_tick(every), 6))# Load clock counter
+    # def load_clock(self, every):
+    #     device.pipe_in(0x81, unit.to_byte(unit.to_tick(every), 6))# Load clock counter
 
-    def get_count(self):
-        return device.wire_out(0x20) # Check cycle count
+    # def read_count(self):
+    #     return device.wire_out(0x20) # Check cycle count
 
-    def get_state(self):
-        state1 = device.read_wire_out(0x21)
-        state2 = device.read_wire_out(0x22)
+    async def update(self, q: asyncio.Queue):
+        pass
 
-        self.state[dev.logic] = 
-        
+    # def read_state(self):
+    #     state_readout = device.read_wire_out(0x21)
 
-    def get_state(target=0):
-        device.update_wire_out()
-        state1 = device.read_wire_out(0x21)
-        state2 = device.read_wire_out(0x22)
+    #     self.state[OP.logic] = unit.bit(state_readout, 3, 0)
+    #     self.state[OP.adc] = unit.bit(state_readout, 7, 4)
+    #     self.state[OP.dac] = unit.bit(state_readout, 11, 8)
+    #     self.state[OP.switch] = unit.bit(state_readout, 15, 12)
 
-        if target==dev.logic:
-            state = u.bit(state2, 3, 0)
-        elif target==dev.adc:
-            state = u.bit(state2, 7, 4)
-        elif target==dev.dac:
-            state = u.bit(state1, 3, 0)
-        elif target==dev.sw_source:
-            state = u.bit(state1, 7, 4)
-        elif target==dev.sw_gate:
-            state = u.bit(state1, 11, 8)
-        elif target==dev.sw_drain:
-            state = u.bit(state1, 15, 12)
-        else:
-            return -1
+    # def read_output(self, size): # Size in 2-bytes (int16)
+    #     result = bytearray(size*2) # Pipe out container, bytes
+    #     device.pipe_out(0xA0, result)
+    #     return result
 
-        return state
+    # Main execution
+    async def _execute(self, test: Procedure):
+        queue = asyncio.Queue()
+        task_recieve = asyncio.create_task(self.update(queue))
+        task_process = asyncio.create_task(test.update(queue))
+        await task_recieve
+        await queue.join()
+        task_process.cancel()
 
-    def get_output(self, size): # Size in 2-bytes (int16)
-        result = bytearray(size*2) # Pipe out container, bytes
-        device.pipe_out(0xA0, result)
-        return result
-
-
-def allow_auto(size=0):
-    """Decorator allow formalize definition of operations.
-    With output_bytes=0, there is no return value expected from operation.
-
-    The return value are thus labeled by integer placeholder and are updated
-    by its value once the results are ready.
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            code = func(*args, **kwargs)
-
-            global _automode_enabled
-            if _automode_enabled:
-                global _session
-                _session.add(code)
-                return _session.output.assign(size)
-            else:
-                set_prog(code)
-                start()
-
-                wait_stop()
-                if size:
-                    result = u.from_byte(get_output(size))
-                    value = 0
-                    for i in range(size):
-                        value = (value<<16) + result[0]
-                        result = result[1:]
-                    return value
-
-        return wrapper
-    return decorator
-
-
-"""Definition of atom operations
-    Each operation coresponds to a basic FPGA function.
-
-Notice:
-        Evoke any decorated function directly using native function call
-    will set the mode to block waiting. Only Memboard.execute(func) enables
-    non-blocking execution with time presicion of micro-second.
-
-    Although python under Linux provides micro-second presicion program
-    control, for compatibility and FPGA stability, non-blocking mode is
-    recommended on all platform.
-
-    @allow_auto should always be used for any atom operation to be
-    created in the future.
-"""
-def to_switch_group(pin):
-    if pin not in range(1, 84+1):
-        raise ValueError('Invalid pin number (1-84).')
-    group = int((pin-1)/28)
-    pin_in_group = (pin-1)%28
-    return group, pin_in_group
-
-@allow_auto()
-def switch(pin=0, y=0, on=False):
-    """Switch control
-    """
-    if y not in range(3):
-        raise ValueError("Invalid Y address.")
-    if not isinstance(on, bool):
-        raise ValueError("Invalid on/off value.")
-    group, x = to_switch_group(pin)
-    return to_code([dev.sw_source+group, op.enable, 0, x+(y<<7)+(on<<11)])
-
-@allow_auto(size=3)
-def time():
-    """Get precise time from FPGA
-    """
-    return to_code([dev.clock])
-
-@allow_auto()
-def reset(device):
-    return to_code([device, op.reset])
-
-"""Definition of compound operation
-    Each compound operation consists of multiple atom operation.
-    @allow_auto is not allowed to use, since only atom operations are
-allowed to register return value on FPGA.
-"""
-def reset_all():
-    reset(dev.adc)
-    reset(dev.dac)
-    reset(dev.sw_source)
-    reset(dev.sw_gate)
-    reset(dev.sw_drain)
-
-#   switch  GND     DAC     ADC
-switch_connection = {
-    0: [0,      2,      0],
-    1: [-1,     1,      -1],
-    2: [-1,     3,      1]
-}
-
-def ground(pin):
-    group, _ = to_switch_group(pin)
-    if [group][0]==-1:
-        raise ValueError(f"Pin {pin} cannot connect to ground, use DAC instead.")
-    else:
-        switch(pin=pin, y=0, on=True)
-
-def apply(pin, v=None):
-    """Apply voltage on given terminal
-    1. determine DAC channel and switch number
-    3. enable switch for connection setup
-    2. enable DAC for voltage setup
-
-    Args:
-        pin (int): pin number
-        voltage (float): voltage value
-    """
-    group, _ = to_switch_group(pin)
-    channel = switch_connection[group][1]
-
-    switch(pin=pin, y=1, on=True)
+    def execute(self, test: Procedure):
+        try:
+            self.load_prog(test.compile())
+            self.start()
+            asyncio.run(self._execute(test))
+            # start_time = time.time()
+            # while (time.time()-start_time < self.time_out):
+            #     self.read_state()
+            #     if (self.state[OP.logic] == State.idle):
+            #         __logger.info('Execution succeeded.')
     
-    # Just connect to DAC if voltage is not given
-    if v is not None:
-        dac(channel=channel, value=u.to_int(v))
-    else:
-        __module_logger.warn(f'Pin {pin} is connected to DAC-{channel}.')
+            # self.stop()
+            # self.read_state()
+            # if (self.state[OP.logic] != State.idle):
+            #     __logger.error(f'Execution failed. <L:{self.state[OP.logic]} | A:{self.state[OP.adc]} | D:{self.state[OP.dac]} | S:{self.state[OP.switch]}>')
+            #     self.reset(OP.logic)
+        except KeyboardInterrupt:
+            self.stop()
+            __logger.warning('KeyboardInterrupt catched, stopping execution.')
+        except RuntimeError:
+            self.stop()
 
-def measure(pin, drive_pin=None, v=None):
-    # ADC
-    group, _ = to_switch_group(pin)
-    channel = switch_connection[group][2]
-    # DAC
-    if drive_pin:
-        drive_group, _ = to_switch_group(drive_pin)
-        drive_channel = switch_connection[drive_group][1]
+    # Components control
+    @executable
+    def adc(self, reset=False, channel=0):
+        if reset:
+            return Ins(OP.adc, rst_flag=True)
+        if channel not in range(2):
+            raise ValueError("Invalid ADC channel.")
+        return Ins(OP.adc, en_flag=True, data=channel)
+            
+    @executable
+    def dac(self, reset=False, channel=0, value=0x800):
+        if reset:
+            return Ins(OP.dac, rst_flag=True)
+        if channel not in range(4):
+            raise ValueError("Invalid DAC channel.")
+        if value not in range(0x1000):
+            raise ValueError("Invalid DAC value, max 0xFFF.")
+        return Ins(OP.dac, en_flag=True, ext_flag=True, data=channel, ext=value)
 
-    # Turn on DAC/ADC connections
-    switch(pin=pin, y=2, on=True)
-    if drive_pin:
-        switch(pin=drive_pin, y=1, on=True)
+    @executable
+    def switch(self, reset=False, no=0, x=0, y=0, on=False):
+        if reset:
+            return Ins(OP.switch, rst_flag=True)
+        if no not in range(6):
+            raise ValueError("Invalid switch number.")
+        if x not in range(32):
+            raise ValueError("Invalid X address.")
+        if y not in range(8):
+            raise ValueError("Invalid Y address.")
+        if not isinstance(on, bool):
+            raise ValueError("Invalid on/off value.")
+        self.connection[no, x, y] = on
+        return Ins(OP.switch, en_flag=True, ext_flag=True, data=no, ext=x+(y<<6)+(on<<9))
 
-    # Apply voltage
-    if drive_pin:
-        dac(channel=drive_channel, value=u.to_int(v))
-        wait(5 *u.us)
-    ret = adc(channel=channel)
+    @executable
+    def sleep(self, value):
+        return Ins(OP.sleep, tic_flag=True, tic=value)
 
-    # Turn off DAC before switching off to eliminate charging effect
-    if drive_pin:
-        dac(channel=drive_channel, value=0x800)
-        wait(1 *u.us)
+    # Functions
+    def apply(self, pin: Port, v=None):
+        """Apply voltage on given terminal
+        1. determine DAC channel and switch number
+        2. enable switch for connection setup
+        3. enable DAC for voltage setup
+        Args:
+            pin (int): pin number
+            voltage (float): voltage value
+        """
+        channel, sw_y = const.get_channel(OP.dac, pin.sw_no)
 
-    # Turn off DAC/ADC connections
-    if drive_pin:
-        switch(pin=drive_pin, y=1, on=False)
-    switch(pin=pin, y=2, on=False)
+        if self.force_mode:
+            __logger.info(f'<FORCE> Opening connection for {pin} and DAC-{channel}.')
+            self.switch(no=pin.sw_no, x=pin.sw_x, y=sw_y, on=True)
+            self.dac(channel=channel, value=unit.to_value(v))
+        else:
+            if self.connection[pin.sw_no, pin.sw_x, sw_y]:
+                __logger.info(f'{pin} was connected to DAC-{channel}.')
+            else:
+                __logger.info(f'Opening connection for {pin} and DAC-{channel}.')
+                self.switch(no=pin.sw_no, x=pin.sw_x, y=1, on=True)
 
-    return ret
+            if v is not None:
+                self.dac(channel=channel, value=unit.to_value(v))
+            else:
+                __logger.info(f'{pin} is connected to DAC-{channel}.')
+
+    def shut(self, pin: Port):
+        if self.force_mode:
+            __logger.info(f'<FORCE> Closing all connections to {pin}.')
+            self.switch(no=pin.sw_no, x=pin.sw_x, y=0)
+            self.switch(no=pin.sw_no, x=pin.sw_x, y=1)
+            self.switch(no=pin.sw_no, x=pin.sw_x, y=2)
+        else:
+            __logger.info('Closing all connections to {pin}.')
+            sw_ys = np.where(self.connection[pin.sw_no, pin.sw_x])
+            for sw_y in sw_ys:
+                self.switch(no=pin.sw_no, x=pin.sw_x, y=sw_y)
+
+    def measure(self, pin: Port, drive_pin: Port=None, v=None):
+        """Measure current
+        pin can be assign to measure specific terminal.
+        drive_pin can be assigned to supply the measurement.
+        """
+        # ADC
+        channel, sw_y = const.get_channel(OP.adc, pin.sw_no)
+        if channel == -1:
+            __logger.error(f'ADC is unavailable for {pin}.')
+        else:
+            self.switch(no=pin.sw_no, x=pin.sw_x, y=sw_y, on=True)
+        # DAC
+        if drive_pin:
+            self.apply(drive_pin, v)
+            self.sleep(1 * unit.us)
+
+        self.adc(channel=channel)
+
+        # Turn off DAC before switching off to eliminate charging effect
+        if drive_pin:
+            self.apply(drive_pin, 0)
+            self.shut(drive_pin)
+        self.shut(pin)

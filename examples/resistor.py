@@ -1,16 +1,15 @@
-import memboard as mb
-from memboard import board
-import memboard.unit as u
+from memboard import Board
+from memboard import unit
+from memboard import Port
 
-def run(output):
-    mb.reset_all()
-    
-    top_pin = mb.socket('C11')
-    bottom_pin = mb.socket('J11')
+def func():
+    pin1 = Port(socket='C11')
+    pin2 = Port(socket='J11')
 
-    output['time'] = mb.time()
-    output['current'] = mb.measure(pin=bottom_pin, drive_pin=top_pin, v=0.2 *u.V)
+    board.time()
+    board.measure(pin=pin2, drive_pin=pin1, v=0.2 *unit.V)
 
+board = Board()
 board.open()
-mb.execute(run, every=1 *u.ms, total=1 *u.s, out='test')
+board.run(func, every=1 *unit.ms, total=1 *unit.s, out='test')
 board.close()
