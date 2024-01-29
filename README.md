@@ -3,120 +3,72 @@
 ## Basic information
 
     Memory board version:           2020-09-18
+    API verison:                    2024-01-27
     
     ADC model:                      AD7367BRUZ
     DAC model:                      AD5725BRSZ-500RL7
     Switch model:                   MT8816AF1
     Socket model:                   
 
-    Opal Kelly device model:        XEM6010-LX150
+    Opal Kelly device model:        XEM7310-A200
     FrontPanel driver version:      5.1.3
-    Xilinx FPGA model:              Spartan-6, XC6SLX150-2fgg484
-    ISE Design Suite version:       14.7
+    Xilinx FPGA model:              Artix-7, XC7A200T-1FBG484
+    Vivado version:                 2023.2
 
     FPGA core language:             Verilog
     API language:                   Python 3.7
 
 ## Software Installation
 
-### 1. Install Python3.7
+### 1. Python3.7
 
-Install **Miniconda3 Windows 64-bit** [Official webpage](https://docs.conda.io/en/latest/miniconda.html).
->Note: Allow Miniconda to modify PATH variables.
+Please refer to online tutorials.
 
-Open Anaconda Command Prompt.
+### 2. **FrontPanel** SDK
+
+Install "driver-only" from [Opal Kelly](https://pins.opalkelly.com/downloads).
+
+### 3. **Memboard** Python library from [Github](https://github.com/frazier-zh/memboard-python-api/archive/refs/heads/master.zip)
 
 ```
-conda create -n py3.7 python=3.7
-conda activate py3.7
-conda install numpy
+git clone https://github.com/frazier-zh/memboard-python-api.git
 ```
-
-### 2. Install **FrontPanel** SDK [Google Drive](https://drive.google.com/file/d/1HM5w99bJSepEbRAgtagARoK4IIzPZ-vO/view?usp=sharing)
-
-After installing FrontPanel SDK, you should add FrontPanel Python API to system environment `"Path"`. The path should contains "ok.py" and "_ok.pyd" file and be similar to:
-
-    your_path_to/Opal Kelly/FrontPanelUSB/API/Python/3.7/x64
-
->Note: Install driver-only from [Opal Kelly](https://pins.opalkelly.com/downloads) if the above link is unavailable.
-
-### 3. Download **Memboard** Python library from [Github](https://github.com/frazier-zh/memboard-python-api/archive/refs/heads/master.zip)
 
 ## Powering The Board
+
+Make the connection as illustrated as follows.
+
+![Alt text](img/power_connection.png)
 
 ## Quick Start
 
 ```Python
-import memboard as mb
-from memboard import wait, time, apply, measure, reset
-import memboard.unit as u
+from memboard.api import mb1
+board = mb1()
+board.connect()                 # connect board
 
-import numpy as np
+board.switch('dac', pin=0)      # make pin 0 to connect to DAC
+board.switch('adc', pin=83)     # make pin 83 to connect to ADC
+board.dac(pin=0, v=2.5)         # apply 2.5V on pin 0
+board.sleep(1000)               # sleep 1000us
+board.dac(pin=0, v=0)           # apply 0V on pin 0
+board.switch('off', pin=0)      # disconnect pin 0
+board.switch('off', pin=83)
 
-def run():
-    top_pin_list = [29, 30, 31, 32, 33]
-    bottom_pin = 83
-    results = np.zeros((2, 5))
+print(board.read_adc())         # read adc data
 
-    reset('all')
-    apply(pin=1, v=0.5 *u.V)
-    apply(pin=84, v=0 *u.V)
-
-    for i in range(5):
-        results[0, i] = time()
-        results[1, i] = measure(pin=bottom_pin, drive_pin=top_pin_list[i], v=0.1 *u.V)
-        wait(1 *u.us)
-
-    return results
-
-
-with mb.connect('../verilog/src/top.bit'):
-    mb.register(run)
-    mb.execute(every=20 *u.us, total=1 *u.s, out='scan')
+board.close()
 ```
 
-## API Reference
+## Using auto mode
 
-### class Board()
+To perform a test with accurate timing, we need to prepare the board operation command upfront.
 
-#### `apply()`
+## Tips
 
-#### `measure()`
-
-#### `wait()`
-
-#### `time()`
-
-## Datasheet
-
-### 1. Socket and Pin Mapping
-
-### 2. Execution Time
-
-|Parts|Operation (ns)|Reset (ns)|
-|---|---:|---:|
-|ADC|1390|20|
-|DAC|60|50|
-|Switch|190|190|
-
->Note: Every operation has an additional 30ns processing time.
-
-### 3. Connections of Switches
-
-|Switch Group|Pin|ADC|DAC|
-|---|---|---|---|
-|Source|1-28|Channel 0|GND*, Channel 1|
-|Gate|29-54|-|Channel 2|
-|Drain|55-84|Channel 1|Channel 3|
-
->Note: Channel 0 should always be set to 0V (GND).*
-
-### 4. Non-idealities
+### Non-idealities
 
 1. DAC maximum glitch amplitude: 1V.
-2. DAC maximum glitch time: 1000ns.
+2. DAC maximum glitch time: 1us.
 3. Switch settling time: 100ns.
 
-## FPGA Programming Guide
-
-Refer to the [guide](verilog/README.md).
